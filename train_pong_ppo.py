@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Callable, Optional, List, Tuple
 
 import imageio
+import concurrent.futures
 import gymnasium as gym
 import numpy as np
 from PIL import Image, ImageDraw
@@ -175,6 +176,7 @@ class TrainConfig:
     max_video_seconds: int = 120
     max_cycles: int = 1
     checkpoint_interval: int = 1  # cycles between timestamped checkpoints
+    iterations_per_set: int = 2  # how many parallel model lines to train each cycle
     seed: int = 0
     early_stop_patience: int = 3
     improvement_threshold: float = 0.05
@@ -197,6 +199,7 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--max-video-seconds", type=int, default=TrainConfig.max_video_seconds)
     parser.add_argument("--max-cycles", type=int, default=TrainConfig.max_cycles)
     parser.add_argument("--checkpoint-interval", type=int, default=TrainConfig.checkpoint_interval)
+    parser.add_argument("--iterations-per-set", type=int, default=TrainConfig.iterations_per_set)
     parser.add_argument("--seed", type=int, default=TrainConfig.seed)
     parser.add_argument("--early-stop-patience", type=int, default=TrainConfig.early_stop_patience)
     parser.add_argument("--improvement-threshold", type=float, default=TrainConfig.improvement_threshold)
@@ -213,6 +216,7 @@ def parse_args() -> TrainConfig:
         max_video_seconds=args.max_video_seconds,
         max_cycles=args.max_cycles,
         checkpoint_interval=args.checkpoint_interval,
+        iterations_per_set=args.iterations_per_set,
         seed=args.seed,
         early_stop_patience=args.early_stop_patience,
         improvement_threshold=args.improvement_threshold,
@@ -239,6 +243,64 @@ def evaluate_model(model: PPO, episodes: int) -> float:
     return total / episodes if episodes else 0.0
 
 
+def _train_single(
+    model_id: str,
+    color: Tuple[int, int, int],
+    cfg: TrainConfig,
+    seed: int,
+) -> Tuple[str, float, List[np.ndarray], bool, str]:
+    """Train one model line in isolation (separate process-friendly)."""
+    set_random_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    env = make_vec_env(
+        lambda: SB3PongEnv(opponent_policy=simple_tracking_policy, render_mode=None),
+        n_envs=8,
+        seed=seed,
+    )
+    latest_path = f"models/{model_id}_latest.zip"
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+    if os.path.exists(latest_path):
+        print(f"[{model_id}] Loading existing model from {latest_path} to continue training...")
+        model = PPO.load(latest_path, env=env)
+    else:
+        print(f"[{model_id}] No existing model found; starting a fresh PPO model...")
+        model = PPO(
+            "MlpPolicy",
+            env,
+            verbose=1,
+            tensorboard_log="logs",
+            n_steps=cfg.n_steps,
+            batch_size=cfg.batch_size,
+            n_epochs=cfg.n_epochs,
+            gamma=cfg.gamma,
+            learning_rate=cfg.learning_rate,
+        )
+
+    model.learn(total_timesteps=cfg.train_timesteps, reset_num_timesteps=False, progress_bar=False)
+
+    if cfg.checkpoint_interval > 0:
+        stamped_model_path = f"models/{model_id}_{timestamp}.zip"
+        model.save(stamped_model_path)
+        print(f"[{model_id}] Saved timestamped model: {stamped_model_path}")
+
+    model.save(latest_path)
+    print(f"[{model_id}] Updated latest model: {latest_path}")
+
+    avg_rew = evaluate_model(model, cfg.eval_episodes)
+    print(f"[{model_id}] Avg reward over {cfg.eval_episodes} eval episodes: {avg_rew:.3f}")
+
+    segment, ponged = record_video_segment(
+        model,
+        ball_color=color,
+        steps=400,
+        overlay_text=f"{model_id} | avg {avg_rew:.2f}",
+    )
+    env.close()
+    return model_id, avg_rew, segment, ponged, timestamp
+
+
 def main():
     cfg = parse_args()
     set_random_seed(cfg.seed)
@@ -254,16 +316,7 @@ def main():
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps({"event": "config", **asdict(cfg)}) + "\n")
 
-    env = make_vec_env(
-        lambda: SB3PongEnv(opponent_policy=simple_tracking_policy, render_mode=None),
-        n_envs=8,
-        seed=cfg.seed,
-    )
-
-    model_ids = [
-        "ppo_pong_custom",
-        "ppo_pong_custom_b",
-    ]
+    model_ids = [f"ppo_pong_custom_{i}" for i in range(cfg.iterations_per_set)]
 
     ball_colors = [
         (255, 0, 0),
@@ -286,51 +339,28 @@ def main():
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         cycle += 1
 
-        for idx, model_id in enumerate(model_ids):
-            latest_path = f"models/{model_id}_latest.zip"
-            color = ball_colors[idx % len(ball_colors)]
-
-            if os.path.exists(latest_path):
-                print(f"[{model_id}] Loading existing model from {latest_path} to continue training...")
-                model = PPO.load(latest_path, env=env)
-            else:
-                print(f"[{model_id}] No existing model found; starting a fresh PPO model...")
-                model = PPO(
-                    "MlpPolicy",
-                    env,
-                    verbose=1,
-                    tensorboard_log="logs",
-                    n_steps=cfg.n_steps,
-                    batch_size=cfg.batch_size,
-                    n_epochs=cfg.n_epochs,
-                    gamma=cfg.gamma,
-                    learning_rate=cfg.learning_rate,
+        with concurrent.futures.ProcessPoolExecutor(max_workers=cfg.iterations_per_set) as executor:
+            futures = []
+            for idx, model_id in enumerate(model_ids):
+                color = ball_colors[idx % len(ball_colors)]
+                futures.append(
+                    executor.submit(
+                        _train_single,
+                        model_id=model_id,
+                        color=color,
+                        cfg=cfg,
+                        seed=cfg.seed + idx,
+                    )
                 )
 
-            model.learn(total_timesteps=cfg.train_timesteps, reset_num_timesteps=False, progress_bar=False)
-
-            if cycle % cfg.checkpoint_interval == 0:
-                stamped_model_path = f"models/{model_id}_{timestamp}.zip"
-                model.save(stamped_model_path)
-                print(f"[{model_id}] Saved timestamped model: {stamped_model_path}")
-
-            model.save(latest_path)
-            print(f"[{model_id}] Updated latest model: {latest_path}")
-
-            avg_rew = evaluate_model(model, cfg.eval_episodes)
-            scores.append((model_id, avg_rew))
-            print(f"[{model_id}] Avg reward over {cfg.eval_episodes} eval episodes: {avg_rew:.3f}")
-
-            segment, ponged = record_video_segment(
-                model,
-                ball_color=color,
-                steps=400,
-                overlay_text=f"{model_id} | avg {avg_rew:.2f}",
-            )
-            if segment:
-                combined_frames_per_model.append(segment)
-            pong_flags.append(ponged)
-            print(f"[{model_id}] Added {len(segment)} frames with ball color {color} to combined video. Ponged: {ponged}")
+            for future in concurrent.futures.as_completed(futures):
+                model_id, avg_rew, segment, ponged, stamp = future.result()
+                scores.append((model_id, avg_rew))
+                if segment:
+                    combined_frames_per_model.append(segment)
+                pong_flags.append(ponged)
+                timestamp = stamp  # use last reported for video naming
+                print(f"[{model_id}] Added {len(segment)} frames with ball color; Ponged: {ponged}")
 
         if combined_frames_per_model and any(combined_frames_per_model):
             grid_frames = build_grid_frames(combined_frames_per_model)
