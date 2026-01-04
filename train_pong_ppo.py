@@ -173,7 +173,7 @@ class TrainConfig:
     learning_rate: float = 2.5e-4
     target_fps: int = 30
     max_video_seconds: int = 120
-    max_cycles: int = 20
+    max_cycles: int = 1
     checkpoint_interval: int = 1  # cycles between timestamped checkpoints
     seed: int = 0
     early_stop_patience: int = 3
@@ -272,15 +272,15 @@ def main():
         (0, 255, 120),
     ]
 
-    all_grid_frames: List[np.ndarray] = []
     failure_detected = False
     best_score = float("-inf")
     no_improve_cycles = 0
     max_video_frames = cfg.max_video_frames
 
     cycle = 0
-    while len(all_grid_frames) < max_video_frames and not failure_detected and cycle < cfg.max_cycles:
+    while not failure_detected and cycle < cfg.max_cycles:
         combined_frames_per_model: List[List[np.ndarray]] = []
+        all_grid_frames: List[np.ndarray] = []
         scores: List[Tuple[str, float]] = []
         pong_flags: List[bool] = []
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -378,15 +378,15 @@ def main():
             print(f"No improvement for {no_improve_cycles} cycles; stopping early.")
             break
 
-    if all_grid_frames:
-        combined_video_path = f"videos/ppo_pong_combined_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
-        try:
-            imageio.mimsave(combined_video_path, all_grid_frames, fps=cfg.target_fps)
-            print(f"Saved combined video with all models in a grid: {combined_video_path} (frames: {len(all_grid_frames)})")
-        except ValueError:
-            print("Video frames were empty or invalid; skipping video write.")
-    else:
-        print("No frames captured; combined video not written.")
+        if all_grid_frames:
+            combined_video_path = f"videos/ppo_pong_combined_{timestamp}.mp4"
+            try:
+                imageio.mimsave(combined_video_path, all_grid_frames, fps=cfg.target_fps)
+                print(f"Saved combined video with all models in a grid: {combined_video_path} (frames: {len(all_grid_frames)})")
+            except ValueError:
+                print("Video frames were empty or invalid; skipping video write.")
+        else:
+            print("No frames captured; combined video not written.")
 
     env.close()
 
