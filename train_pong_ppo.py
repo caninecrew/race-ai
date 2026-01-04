@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import concurrent.futures
 import csv
@@ -13,7 +15,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional, List, Tuple, Dict, Any, Sequence
 
-import gym
 import gymnasium as gym
 import imageio
 import numpy as np
@@ -39,6 +40,58 @@ try:
     import retro  # type: ignore
 except Exception:  # pragma: no cover - optional dep
     retro = None
+
+
+@dataclass
+class TrainConfig:
+    env_kind: str = "pong"
+    train_timesteps: int = 300_000
+    n_steps: int = 256
+    batch_size: int = 512
+    n_epochs: int = 4
+    gamma: float = 0.99
+    learning_rate: float = 2.5e-4
+    device: str = "auto"
+    target_fps: int = 30
+    max_video_seconds: int = 120
+    max_cycles: int = 1
+    checkpoint_interval: int = 1  # cycles between timestamped checkpoints
+    iterations_per_set: int = 6  # how many parallel model lines to train each cycle
+    n_envs: int = 8  # vectorized envs per PPO learner
+    seed: int = 0
+    deterministic: bool = False
+    base_seed: int = 0
+    early_stop_patience: int = 3
+    improvement_threshold: float = 0.05
+    eval_episodes: int = 3
+    top_k_checkpoints: int = 3
+    no_checkpoint: bool = False
+    individual_videos: bool = False
+    cpu_affinity: Optional[str] = None  # e.g. "0,1,2"
+    video_dir: str = "videos"
+    model_dir: str = "models"
+    log_dir: str = "logs"
+    metrics_csv: str = "logs/metrics.csv"
+    kart_env_id: str = "SuperMarioKart-Snes"
+    kart_state: Optional[str] = None
+    kart_action_set: str = "drift-lite"
+    kart_frame_size: int = 84
+    kart_frame_stack: int = 4
+    kart_frame_skip: int = 4
+    kart_grayscale: bool = True
+    kart_use_ram: bool = False
+    kart_progress_scale: float = 0.02
+    kart_speed_scale: float = 0.001
+    kart_lap_bonus: float = 1.0
+    kart_offtrack_penalty: float = -0.05
+    kart_crash_penalty: float = -0.25
+    kart_max_no_progress_steps: int = 600
+    kart_video_steps: int = 800
+    config_path: Optional[str] = None
+
+    @property
+    def max_video_frames(self) -> int:
+        return self.target_fps * self.max_video_seconds
 
 
 class SB3PongEnv(gym.Env):
@@ -454,58 +507,6 @@ def _safe_write_video(frames: List[np.ndarray], path: Path, fps: int) -> bool:
     except Exception as exc:
         print(f"Video write failed for {path.name}: {exc}")
         return False
-
-
-@dataclass
-class TrainConfig:
-    env_kind: str = "pong"
-    train_timesteps: int = 300_000
-    n_steps: int = 256
-    batch_size: int = 512
-    n_epochs: int = 4
-    gamma: float = 0.99
-    learning_rate: float = 2.5e-4
-    device: str = "auto"
-    target_fps: int = 30
-    max_video_seconds: int = 120
-    max_cycles: int = 1
-    checkpoint_interval: int = 1  # cycles between timestamped checkpoints
-    iterations_per_set: int = 6  # how many parallel model lines to train each cycle
-    n_envs: int = 8  # vectorized envs per PPO learner
-    seed: int = 0
-    deterministic: bool = False
-    base_seed: int = 0
-    early_stop_patience: int = 3
-    improvement_threshold: float = 0.05
-    eval_episodes: int = 3
-    top_k_checkpoints: int = 3
-    no_checkpoint: bool = False
-    individual_videos: bool = False
-    cpu_affinity: Optional[str] = None  # e.g. "0,1,2"
-    video_dir: str = "videos"
-    model_dir: str = "models"
-    log_dir: str = "logs"
-    metrics_csv: str = "logs/metrics.csv"
-    kart_env_id: str = "SuperMarioKart-Snes"
-    kart_state: Optional[str] = None
-    kart_action_set: str = "drift-lite"
-    kart_frame_size: int = 84
-    kart_frame_stack: int = 4
-    kart_frame_skip: int = 4
-    kart_grayscale: bool = True
-    kart_use_ram: bool = False
-    kart_progress_scale: float = 0.02
-    kart_speed_scale: float = 0.001
-    kart_lap_bonus: float = 1.0
-    kart_offtrack_penalty: float = -0.05
-    kart_crash_penalty: float = -0.25
-    kart_max_no_progress_steps: int = 600
-    kart_video_steps: int = 800
-    config_path: Optional[str] = None
-
-    @property
-    def max_video_frames(self) -> int:
-        return self.target_fps * self.max_video_seconds
 
 
 ENV_DEFAULTS: Dict[str, Dict[str, Any]] = {
