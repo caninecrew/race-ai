@@ -87,7 +87,8 @@ def main():
         learning_rate=2.5e-4,
     )
 
-    model.learn(total_timesteps=1_000_000)
+    # Shorter run for a quick playable model; bump this higher for better skill.
+    model.learn(total_timesteps=100_000)
     model.save("models/ppo_pong_custom")
     env.close()
 
