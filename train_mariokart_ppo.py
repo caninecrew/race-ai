@@ -12,18 +12,16 @@ from typing import Deque, Dict, List, Optional, Sequence, Tuple
 import gymnasium as gym
 import imageio.v2 as iio
 import numpy as np
-import torch
 from PIL import Image
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import set_random_seed
+from stable_baselines3.common.vec_env import VecMonitor
 
 try:
     import retro  # type: ignore
-except Exception as exc:  # pragma: no cover - optional dep
-    raise RuntimeError(
-        "Gym Retro is required for Mario Kart training. Install with `pip install gym-retro` and ensure the ROM is integrated."
-    ) from exc
+except Exception:  # pragma: no cover - optional dep
+    retro = None
 
 
 DEFAULT_BUTTONS: Sequence[str] = (
@@ -68,6 +66,42 @@ ACTION_SETS: Dict[str, List[List[str]]] = {
 }
 
 
+def _require_retro() -> None:
+    if retro is None:
+        raise RuntimeError(
+            "stable-retro is required for Mario Kart training. Install with `pip install stable-retro` "
+            "and import the SNES ROM via `python -m retro.import <path-to-roms>`."
+        )
+
+
+def _validate_game_and_state(env_id: str, state: Optional[str]) -> None:
+    _require_retro()
+    try:
+        integrations = getattr(retro.data, "Integrations", None)
+        inttype = getattr(integrations, "ALL", None) if integrations else None
+        games = set(retro.data.list_games(inttype=inttype) if inttype is not None else retro.data.list_games())
+    except Exception:
+        # If stable-retro listing fails, fall back to make() which will raise a clearer error.
+        return
+
+    if env_id not in games:
+        raise RuntimeError(
+            f"Game '{env_id}' not found in stable-retro data. Import the ROM via "
+            "`python -m retro.import <path-to-roms>` and confirm the game id."
+        )
+
+    if state:
+        try:
+            states = set(retro.data.list_states(env_id))
+        except Exception:
+            states = set()
+        if states and state not in states:
+            raise RuntimeError(
+                f"State '{state}' not found for '{env_id}'. Available: {sorted(states)}. "
+                "Use `retro.data.list_states('<game>')` after importing the ROM."
+            )
+
+
 def _build_action_map(buttons: Sequence[str], combos: List[List[str]]) -> List[np.ndarray]:
     action_map: List[np.ndarray] = []
     for combo in combos:
@@ -93,7 +127,7 @@ def _preprocess_frame(frame: np.ndarray, size: int, grayscale: bool = True) -> n
 
 class RetroMarioKartEnv(gym.Env):
     """
-    Gymnasium wrapper for Gym Retro Mario Kart (SNES) with discrete action mapping,
+    Gymnasium wrapper for stable-retro Mario Kart (SNES) with discrete action mapping,
     frame skipping, stacking, and lightweight reward shaping.
     """
 
@@ -115,7 +149,9 @@ class RetroMarioKartEnv(gym.Env):
         render_mode: Optional[str] = None,
     ):
         super().__init__()
-        self.env = retro.make(game=env_id, state=state, render_mode=render_mode)
+        _validate_game_and_state(env_id, state)
+        make_kwargs = {"game": env_id, "state": state, "render_mode": render_mode}
+        self.env = retro.make(**make_kwargs)
         self.button_names: Sequence[str] = getattr(self.env, "buttons", DEFAULT_BUTTONS)
         if action_set not in ACTION_SETS:
             raise ValueError(f"Unknown action set '{action_set}'. Available: {list(ACTION_SETS)}")
@@ -268,7 +304,7 @@ def _load_config_file(path: Optional[str]) -> Dict[str, float]:
     if not cfg_path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
     with cfg_path.open("r", encoding="utf-8") as fh:
-        data = json.load(fh) if cfg_path.suffix.lower() == ".json" else json.load(fh)
+        data = json.load(fh)
     if not isinstance(data, dict):
         raise ValueError("Config file must contain a mapping of keys to values.")
     return data
@@ -280,7 +316,9 @@ def parse_args() -> TrainConfig:
     known, remaining = base_parser.parse_known_args()
     file_cfg = _load_config_file(known.config)
 
-    parser = argparse.ArgumentParser(description="Train PPO on Super Mario Kart (Gym Retro).", parents=[base_parser])
+    parser = argparse.ArgumentParser(
+        description="Train PPO on Super Mario Kart (stable-retro).", parents=[base_parser]
+    )
     parser.add_argument("--env-id", type=str, default=file_cfg.get("env_id", TrainConfig.env_id))
     parser.add_argument("--state", type=str, default=file_cfg.get("state", TrainConfig.state))
     parser.add_argument("--action-set", type=str, choices=list(ACTION_SETS), default=file_cfg.get("action_set", TrainConfig.action_set))
@@ -451,6 +489,7 @@ def main():
         )
 
     vec_env = make_vec_env(_make_env, n_envs=cfg.n_envs, seed=cfg.seed)
+    vec_env = VecMonitor(vec_env)
     latest_path = Path(cfg.model_dir) / f"{cfg.model_prefix}_latest.zip"
 
     if latest_path.exists():

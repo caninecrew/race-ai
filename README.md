@@ -20,7 +20,7 @@ Lightweight reinforcement learning setup for training PPO agents on a custom Pon
 - Evaluate a checkpoint: `python eval_pong.py --model-path models/ppo_pong_custom_latest.zip --episodes 5 [--render --output-csv logs/eval.csv]`.
   - Evaluation reports average reward (with CI), win rate, return rate, and rally length; missing models are handled gracefully.
 
-## Mario Kart (Gym Retro)
+## Mario Kart (stable-retro)
 - Import the SNES ROM once: `python -m retro.import /path/to/roms` (expects `SuperMarioKart-Snes`).
 - Train via the unified entrypoint: `python train_pong_ppo.py --env-kind kart --kart-state MarioCircuit1 --kart-action-set drift-lite --kart-frame-size 84 --train-timesteps 200000 --iterations-per-set 2 --n-envs 2 --checkpoint-interval 1`.
   - Reward shaping blends track progress, speed bonuses, lap rewards, and penalties for going off-track or crashing. Observations can be 84x84 grayscale stacks or normalized RAM/info features with `--kart-use-ram`.

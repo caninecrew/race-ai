@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import concurrent.futures
 import csv
 import json
@@ -40,6 +41,16 @@ try:
     import retro  # type: ignore
 except Exception:  # pragma: no cover - optional dep
     retro = None
+
+
+def _tensorboard_available() -> bool:
+    return importlib.util.find_spec("tensorboard") is not None
+
+
+def _progress_bar_available() -> bool:
+    has_tqdm = importlib.util.find_spec("tqdm") is not None
+    has_rich = importlib.util.find_spec("rich") is not None
+    return has_tqdm and has_rich
 
 
 @dataclass
@@ -553,10 +564,9 @@ def _load_config_file(path: Optional[str]) -> Dict[str, Any]:
 def parse_args() -> TrainConfig:
     base_parser = argparse.ArgumentParser(add_help=False)
     base_parser.add_argument("--config", type=str, help="Path to YAML/JSON config to merge.")
-    base_parser.add_argument("--env-kind", type=str, choices=["pong", "kart"], help="Environment to train.")
     known, remaining = base_parser.parse_known_args()
     file_cfg = _load_config_file(known.config)
-    env_kind = (known.env_kind or file_cfg.get("env_kind") or TrainConfig.env_kind).lower()
+    env_kind = (file_cfg.get("env_kind") or TrainConfig.env_kind).lower()
     env_defaults = ENV_DEFAULTS.get(env_kind, ENV_DEFAULTS["pong"])
 
     parser = argparse.ArgumentParser(description="Train PPO agents for Pong or Mario Kart.", parents=[base_parser])
@@ -830,10 +840,13 @@ def _train_single(
     Path(cfg.model_dir).mkdir(parents=True, exist_ok=True)
     latest_path = os.path.join(cfg.model_dir, f"{model_id}_latest.zip")
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    tb_log = cfg.log_dir if _tensorboard_available() else None
+    use_progress_bar = _progress_bar_available()
 
     if os.path.exists(latest_path):
         print(f"[{model_id}] Loading existing model from {latest_path} to continue training...")
         model = PPO.load(latest_path, env=env, device=cfg.device)
+        model.tensorboard_log = tb_log
     else:
         print(f"[{model_id}] No existing model found; starting a fresh PPO model...")
         policy = "CnnPolicy" if cfg.env_kind == "kart" and not cfg.kart_use_ram else "MlpPolicy"
@@ -841,7 +854,7 @@ def _train_single(
             policy,
             env,
             verbose=1,
-            tensorboard_log=cfg.log_dir,
+            tensorboard_log=tb_log,
             n_steps=cfg.n_steps,
             batch_size=cfg.batch_size,
             n_epochs=cfg.n_epochs,
@@ -850,7 +863,7 @@ def _train_single(
             device=cfg.device,
         )
 
-    model.learn(total_timesteps=cfg.train_timesteps, reset_num_timesteps=False, progress_bar=True)
+    model.learn(total_timesteps=cfg.train_timesteps, reset_num_timesteps=False, progress_bar=use_progress_bar)
 
     stamped_model_path: Optional[str] = None
     if cfg.checkpoint_interval > 0 and not cfg.no_checkpoint:

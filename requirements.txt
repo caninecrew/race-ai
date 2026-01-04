@@ -1,0 +1,12 @@
+gymnasium>=0.29
+stable-baselines3[extra]>=2.2.1
+torch>=2.1
+numpy>=1.24
+pygame>=2.5
+Pillow>=10.0
+imageio>=2.34
+imageio-ffmpeg>=0.4
+pyyaml>=6.0
+tqdm>=4.66
+rich>=13.7
+stable-retro>=0.9.0
