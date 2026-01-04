@@ -36,4 +36,5 @@ videos/
 *.tar
 *.7z
 
+/mario
 gym_retro-0.8.0-cp38-cp38-win_amd64.whl
