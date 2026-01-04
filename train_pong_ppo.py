@@ -79,7 +79,7 @@ def _add_overlay(frame: np.ndarray, text: str) -> np.ndarray:
         return frame
     img = Image.fromarray(frame)
     drawer = ImageDraw.Draw(img)
-    drawer.rectangle([(0, 0), (img.width, 22)], fill=(0, 0, 0, 128))
+    drawer.rectangle([(0, 0), (img.width, 22)], fill=(0, 0, 0))
     drawer.text((5, 4), text, fill=(255, 255, 255))
     return np.array(img)
 
