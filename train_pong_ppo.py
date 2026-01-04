@@ -304,7 +304,9 @@ def evaluate_model(model: PPO, episodes: int) -> Dict[str, float]:
     rally_lengths: List[int] = []
     wins = 0
     for _ in range(episodes):
-        obs, _ = eval_env.reset()
+        obs, info = eval_env.reset()
+        left_score = info.get("left_score", 0)
+        right_score = info.get("right_score", 0)
         done = False
         ep_rew = 0.0
         steps = 0
@@ -315,17 +317,19 @@ def evaluate_model(model: PPO, episodes: int) -> Dict[str, float]:
             action, _ = model.predict(obs, deterministic=True)
             obs, rew, terminated, truncated, info = eval_env.step(action)
             rally_steps += 1
-            if info["left_score"] != last_left or info["right_score"] != last_right:
+            left_score = info.get("left_score", left_score)
+            right_score = info.get("right_score", right_score)
+            if left_score != last_left or right_score != last_right:
                 rally_lengths.append(rally_steps)
                 rally_steps = 0
-                last_left, last_right = info["left_score"], info["right_score"]
+                last_left, last_right = left_score, right_score
             if rew > 0:
                 returns.append(1)
             ep_rew += rew
             steps += 1
             done = terminated or truncated
         rewards.append(ep_rew)
-        if eval_env.left_score > eval_env.right_score:
+        if left_score > right_score:
             wins += 1
     eval_env.close()
 
