@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional, List, Tuple, Dict, Any
 
+import gym
 import gymnasium as gym
 import imageio
 import numpy as np
