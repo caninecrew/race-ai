@@ -3,6 +3,7 @@ import random
 from dataclasses import dataclass
 from typing import Dict, Tuple, Optional, Callable
 
+import numpy as np
 import pygame
 
 
@@ -49,6 +50,7 @@ class PongEnv:
 
     - render_mode=None     -> headless (fast training)
     - render_mode="human"  -> open a pygame window (watch play)
+    - render_mode="rgb_array" -> offscreen frames for video capture
     """
 
     def __init__(
@@ -75,6 +77,8 @@ class PongEnv:
 
         if self.render_mode == "human":
             self._create_window()
+        elif self.render_mode == "rgb_array":
+            self._create_surface()
 
         # State
         self.left_score = 0
@@ -115,6 +119,10 @@ class PongEnv:
     def _create_window(self) -> None:
         self.screen = pygame.display.set_mode((self.cfg.width, self.cfg.height))
         pygame.display.set_caption("Pong (AI View)")
+
+    def _create_surface(self) -> None:
+        # Offscreen surface used for rgb_array capture without opening a window.
+        self.screen = pygame.Surface((self.cfg.width, self.cfg.height))
 
     # ----------------------------
     # API
@@ -217,7 +225,7 @@ class PongEnv:
         return obs, reward_left, done, info
 
     def render(self) -> None:
-        if self.render_mode != "human" or self.screen is None:
+        if self.render_mode not in ("human", "rgb_array") or self.screen is None:
             return
 
         WHITE = (255, 255, 255)
@@ -245,8 +253,14 @@ class PongEnv:
         self.screen.blit(ltxt, (30, 15))
         self.screen.blit(rtxt, (self.cfg.width - 70, 15))
 
-        pygame.display.flip()
-        self.clock.tick(self.cfg.render_fps)
+        if self.render_mode == "human":
+            pygame.display.flip()
+            self.clock.tick(self.cfg.render_fps)
+        elif self.render_mode == "rgb_array":
+            # Convert surface to (H, W, 3) numpy array for video capture.
+            frame = pygame.surfarray.array3d(self.screen)
+            frame = np.transpose(frame, (1, 0, 2))
+            return frame
 
     def close(self) -> None:
         pygame.quit()

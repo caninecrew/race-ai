@@ -20,7 +20,7 @@ class SB3PongEnv(gym.Env):
     The learning agent controls the left paddle; the right paddle uses a fixed policy.
     """
 
-    metadata = {"render_modes": ["human"]}
+    metadata = {"render_modes": ["human", "rgb_array"]}
 
     def __init__(
         self,
