@@ -1,77 +1,70 @@
-# Pong AI Trainer
+# Race AI (Mario Kart 64)
 
-Lightweight reinforcement learning setup for training PPO agents on a custom Pong environment built with pygame and Stable Baselines3.
+Mario Kart 64–only stack built around `gym-mupen64plus`, focused on launching MK64 for manual play and training PPO agents against the emulator.
 
-## Requirements
-- Python 3.9+
-- `pip install -r requirements` equivalent packages: `pygame`, `gymnasium`, `stable-baselines3`, `imageio`, `Pillow`, `numpy`, `torch`, `PyYAML` (for YAML configs)
+## What’s here
+- `play_mario_kart.py`: launch Mupen64Plus with sensible defaults and keyboard bindings. Batch wrappers (`play_mk64.bat`, `train_mk64.bat`) call into it from Windows/WSL.
+- `gym_mupen64plus.py`: light PPO harness using Stable Baselines3 on `gym_mupen64plus` environments. Registers the custom menu-restricted env from `mk64_flow_env.py` when available.
+- `mk64_flow_env.py`, `mk64_common.py`, `key_bindings_mk64.py`: helpers for scripted menus, restricted action spaces, and default input mappings.
 
-## Usage
-- Demo the environment: `python pong.py` (controls: W/S left, Up/Down right; auto-tracks when headless).
-- Train agents: `python train_pong_ppo.py --env-kind pong --config configs/example.yaml` or pass flags such as `--train-timesteps 200000 --checkpoint-interval 1 --seed 0 --n-envs 4 --iterations-per-set 2`.
-  - Artifacts: models in `models/`, logs in `logs/`, combined videos in `videos/`. Resolved configs are emitted to `logs/train_run_<timestamp>.jsonl`, and per-cycle metrics are appended to `logs/metrics.csv`.
-  - Config files: YAML/JSON supported with `--config`. CLI flags always override file values.
-  - Checkpoints: `_latest` is always written; timestamped checkpoints can be disabled via `--no-checkpoint`. Top-K pruning keeps the best checkpoints by average reward.
-  - Parallelism: control model parallelism via `--iterations-per-set` and vectorized envs with `--n-envs`. Use `--device cpu`/`cuda` and optional `--cpu-affinity` for pinning.
-  - Determinism: set `--seed` and `--deterministic` to force deterministic torch ops; seeds per worker are derived from the base seed and recorded in logs.
-  - Videos: enable per-model renders with `--individual-videos`. Video writes are atomic to avoid corruption.
-- Evaluate a checkpoint: `python eval_pong.py --model-path models/ppo_pong_custom_latest.zip --episodes 5 [--render --output-csv logs/eval.csv]`.
-  - Evaluation reports average reward (with CI), win rate, return rate, and rally length; missing models are handled gracefully.
-
-## Mario Kart 64 (gym-mupen64plus, legacy stack)
-- Only Mario Kart 64 via `gym-mupen64plus` is supported; the older stable-retro SNES path is not.
-- System deps (WSL/Ubuntu): `sudo apt-get install -y python3.8 python3.8-venv python3.8-dev build-essential cmake git mupen64plus-ui-console mupen64plus-input-all mupen64plus-video-rice mupen64plus-audio-sdl xvfb`.
-- Create dedicated venv: `python3.8 -m venv mk64-venv && source mk64-venv/bin/activate`.
-- Install pinned legacy deps: `pip install -r requirements-mk64.txt` then install the wrapper: `pip install --no-deps git+https://github.com/bzier/gym-mupen64plus.git`.
-- Place the ROM where the env expects it: copy your MK64 ROM to `mk64-venv/lib/python3.8/site-packages/gym_mupen64plus/ROMs/marioKart.n64` (keep the filename).
-- Custom flow env (agent picks the driver, menus are scripted, restricted driving actions): `Mario-Kart-Menu-Restricted-v0`.
-- Smoke test:
+## Prerequisites (WSL/Ubuntu)
+- Python 3.8 with venv modules.
+- System packages for Mupen64Plus and build tooling:
+  ```bash
+  sudo apt-get update && sudo apt-get install -y \
+    python3.8 python3.8-venv python3.8-dev build-essential cmake git \
+    mupen64plus-ui-console mupen64plus-input-all mupen64plus-video-rice mupen64plus-audio-sdl xvfb
   ```
-  source mk64-venv/bin/activate
-  python - <<'PY'
-  import gym, gym_mupen64plus  # noqa: F401
-  env = gym.make("Mario-Kart-Discrete-Luigi-Raceway-v0")
-  obs = env.reset()
-  print(type(obs), getattr(obs, "shape", None))
-  env.close()
-  PY
+
+## Setup
+1) Create and activate the dedicated venv (keeps the legacy `gym` pinned and separate from anything modern):
+   ```bash
+   python3.8 -m venv mk64-venv
+   source mk64-venv/bin/activate
+   ```
+2) Install Python deps (legacy gym/tooling): `pip install -r requirements.txt`  
+   Then install the MK64 wrapper: `pip install --no-deps git+https://github.com/bzier/gym-mupen64plus.git`
+3) Place your ROM where the env expects it (or override with `MK64_ROM`):
+   `mk64-venv/lib/python3.8/site-packages/gym_mupen64plus/ROMs/marioKart.n64`
+4) (Optional) Set plugin overrides if your Mupen64Plus install lives elsewhere:
+   - `MK64_GFX_PLUGIN` (default: `/usr/lib/x86_64-linux-gnu/mupen64plus/mupen64plus-video-rice.so`)
+   - `MK64_INPUT_DRIVER` (default: `/usr/lib/x86_64-linux-gnu/mupen64plus/mupen64plus-input-sdl.so`)
+   - `MUPEN_CMD` if the executable is not on PATH
+
+## Smoke test (imports + env)
+```bash
+source mk64-venv/bin/activate
+python - <<'PY'
+import gym, gym_mupen64plus  # noqa: F401
+env = gym.make("Mario-Kart-Discrete-Luigi-Raceway-v0")
+obs = env.reset()
+print(type(obs), getattr(obs, "shape", None))
+env.close()
+PY
+```
+
+## Playing manually
+- Activate the venv, ensure your ROM/plugins are reachable, then run:
+  ```bash
+  python play_mario_kart.py
   ```
-- Notes: this stack uses gym 0.7.4 and is intentionally isolated from the main gymnasium/SB3 requirements. System plugins are not vendored; see .gitignore for ROMs and local venv paths.
+- Windows/WSL: `play_mk64.bat` wraps the above (reads the repo path automatically).
+- Default SDL input bindings (mupen64plus): Stick=Arrows, A(accel)=Z, B(brake)=X, R(hop/slide)=S, L(map)=A, Start=Enter, C-Up/Down/Left/Right=I/K/J/L.
 
-## Mario Kart 64 (gym-mupen64plus, legacy stack)
-- System deps (WSL/Ubuntu): `sudo apt-get install -y python3.8 python3.8-venv python3.8-dev build-essential cmake git mupen64plus-ui-console mupen64plus-input-all mupen64plus-video-rice mupen64plus-audio-sdl xvfb`.
-- Create dedicated venv: `python3.8 -m venv mk64-venv && source mk64-venv/bin/activate`.
-- Install pinned legacy deps: `pip install -r requirements-mk64.txt` then install the wrapper: `pip install --no-deps git+https://github.com/bzier/gym-mupen64plus.git`.
-- Place the ROM where the env expects it: copy your MK64 ROM to `mk64-venv/lib/python3.8/site-packages/gym_mupen64plus/ROMs/marioKart.n64` (keep the filename).
-- Smoke test:
+## Training
+- PPO harness (Stable Baselines3) against gym-mupen64plus:
+  ```bash
+  python gym_mupen64plus.py --env-id Mario-Kart-Menu-Restricted-v0 --timesteps 2_000_000 --device cuda
   ```
-  source mk64-venv/bin/activate
-  python - <<'PY'
-  import gym, gym_mupen64plus  # noqa: F401
-  env = gym.make("Mario-Kart-Discrete-Luigi-Raceway-v0")
-  obs = env.reset()
-  print(type(obs), getattr(obs, "shape", None))
-  env.close()
-  PY
-  ```
-- Notes: this stack uses gym 0.7.4 and is intentionally isolated from the main gymnasium/SB3 requirements. System plugins are not vendored; see .gitignore for ROMs and local venv paths.
+  - Use `--list-envs` to discover available env ids (includes the custom menu-restricted env when registered).
+  - Artifacts land in `models_mk64/` and `logs_mk64/`.
+  - The custom flow env (`MenuScriptedMarioKartEnv`) scripts menus up to driver select, restricts driving actions, and lives in `mk64_flow_env.py`.
+- If `stable-baselines3` / `torch` are not installed in your mk64 venv, install them manually (version choice depends on your CUDA/CPU setup).
 
-### Default controls (mupen64plus SDL input)
-- Stick (steer/aim): arrow keys (Up/Down/Left/Right)
-- A (accelerate): Z
-- B (brake/reverse): X
-- R (hop/power slide): S
-- L (map toggle): A
-- Start (pause): Enter/Return
-- C-buttons (camera/quick look): I (Up), K (Down), J (Left), L (Right)
-- D-Pad: disabled by default unless configured in `~/.config/mupen64plus/InputAutoCfg.ini`
+## Environment overrides
+- `MK64_ROM`, `MK64_GFX_PLUGIN`, `MK64_INPUT_DRIVER`, `MUPEN_CMD` are honored by `mk64_common.py` and the launch/training scripts.
+- The batch files use the repo path automatically; override `MK64_ROM` inside them if your ROM location differs.
 
-## Common pitfalls
-- Headless pygame: ensure `SDL_VIDEODRIVER=dummy` is respected (default when not rendering). On Linux servers install `libsdl2-dev` packages; on macOS use `brew install sdl2 sdl2_image`.
-- Gymnasium/pygame versions: stick to recent gymnasium (>=0.29) and pygame (>=2.5) to avoid shape or surface issues.
-- Stable Baselines3 and torch: CPU-only installs work; for GPU, set `--device cuda` and ensure CUDA-enabled torch is installed.
-- Resume training: keep `_latest` checkpoints; rerun training with the same `model_dir` to continue. Passing `--no-checkpoint` skips timestamped saves but still updates `_latest`.
-
-## Smoke Tests
-- Quick checks for shapes, deterministic seeds, and paddle bounds: `python -m pytest tests/test_pong_env.py`.
-- Extended smoke / config tests: `python -m pytest tests/test_train_pipeline.py -m \"not slow\"` (or include `-m slow` to run the minimal training smoke test).
+## Known caveats
+- This stack intentionally uses the legacy `gym` (0.7.x) required by `gym-mupen64plus`; keep it isolated from modern gymnasium installs.
+- Stable Baselines3 expects more recent gym APIs; if you hit compatibility errors, pin SB3/torch to versions that work for your environment or adapt the training harness accordingly.

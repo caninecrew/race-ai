@@ -5,12 +5,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
-
 import gym
-from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack, VecMonitor, VecTransposeImage
 
 try:
     from mk64_flow_env import register_menu_restricted_env
@@ -18,6 +13,20 @@ except Exception:
     register_menu_restricted_env = None
 
 from mk64_common import require_gym_mupen64plus, list_registered_env_ids
+
+
+def require_sb3():
+    try:
+        from stable_baselines3 import PPO
+        from stable_baselines3.common.callbacks import CheckpointCallback
+        from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack, VecMonitor, VecTransposeImage
+    except Exception as exc:
+        raise RuntimeError(
+            "Stable Baselines3 + torch are required for training. "
+            "Install them inside mk64-venv (choose versions compatible with your CUDA/CPU stack)."
+        ) from exc
+
+    return PPO, CheckpointCallback, DummyVecEnv, VecFrameStack, VecMonitor, VecTransposeImage
 
 
 def parse_args():
@@ -63,6 +72,8 @@ def main() -> int:
 
     Path(args.models_dir).mkdir(parents=True, exist_ok=True)
     Path(args.logs_dir).mkdir(parents=True, exist_ok=True)
+
+    PPO, CheckpointCallback, DummyVecEnv, VecFrameStack, VecMonitor, VecTransposeImage = require_sb3()
 
     def make_env():
         env = gym.make(args.env_id)
