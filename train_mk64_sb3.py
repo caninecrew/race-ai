@@ -99,7 +99,8 @@ def main() -> int:
         vec,
         verbose=1,
         tensorboard_log=args.logs_dir,
-        n_steps=2048,
+        # High-resolution observations make the PPO buffer huge; use smaller rollout length to limit RAM.
+        n_steps=256,
         batch_size=64,
         n_epochs=10,
         gamma=0.99,
