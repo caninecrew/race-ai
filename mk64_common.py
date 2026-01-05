@@ -114,7 +114,7 @@ def list_registered_env_ids(keyword: str = "Mario") -> List[str]:
     Useful for discovering track-specific MK64 env ids.
     """
     try:
-        import gym
+        import gym  # type: ignore
     except Exception:
         return []
 
