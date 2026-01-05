@@ -4,7 +4,7 @@ Mario Kart 64–only stack built around `gym-mupen64plus`, focused on launching 
 
 ## What’s here
 - `play_mario_kart.py`: launch Mupen64Plus with sensible defaults and keyboard bindings. Batch wrappers (`play_mk64.bat`, `train_mk64.bat`) call into it from Windows/WSL.
-- `gym_mupen64plus.py`: light PPO harness using Stable Baselines3 on `gym_mupen64plus` environments. Registers the custom menu-restricted env from `mk64_flow_env.py` when available.
+- `train_mk64_sb3.py`: light PPO harness using Stable Baselines3 on `gym_mupen64plus` environments. Registers the custom menu-restricted env from `mk64_flow_env.py` when available.
 - `mk64_flow_env.py`, `mk64_common.py`, `key_bindings_mk64.py`: helpers for scripted menus, restricted action spaces, and default input mappings.
 
 ## Prerequisites (WSL/Ubuntu)
@@ -54,7 +54,7 @@ PY
 ## Training
 - PPO harness (Stable Baselines3) against gym-mupen64plus:
   ```bash
-  python gym_mupen64plus.py --env-id Mario-Kart-Menu-Restricted-v0 --timesteps 2_000_000 --device cuda
+  python train_mk64_sb3.py --env-id Mario-Kart-Menu-Restricted-v0 --timesteps 2_000_000 --device cuda
   ```
   - Use `--list-envs` to discover available env ids (includes the custom menu-restricted env when registered).
   - Artifacts land in `models_mk64/` and `logs_mk64/`.

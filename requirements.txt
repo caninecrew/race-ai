@@ -7,3 +7,5 @@ mss==4.0.2
 requests==2.32.4
 six==1.17.0
 pyglet==2.1.11
+stable-baselines3==1.6.2
+torch==1.13.1
