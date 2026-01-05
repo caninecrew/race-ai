@@ -1,13 +1,14 @@
 """
 Default keyboard bindings for mupen64plus SDL input (Mario Kart 64).
 
-These map to the ASCII keycodes that Mupen64Plus expects in InputAutoCfg.ini:
+These map to the keycodes Mupen64Plus expects in InputAutoCfg.ini:
   Stick: arrow keys (Up/Down/Left/Right)
-  A (accelerate): Z           -> keycode 122
-  B (brake/reverse): X        -> keycode 120
-  R (hop/power slide): S      -> keycode 115
-  L (map toggle): A           -> keycode 97
-  Start (pause): Enter/Return -> keycode 13
+  A (accelerate): Z                -> keycode 122
+  Z Trig (use item): Left Shift    -> keycode 304  (or pick another key)
+  B (brake/reverse): X             -> keycode 120
+  R (hop/power slide): S           -> keycode 115
+  L (map toggle): A                -> keycode 97
+  Start (pause): Enter/Return      -> keycode 13
   C-Buttons: I (Up/105), K (Down/107), J (Left/106), L (Right/108)
   D-Pad: disabled by default unless configured.
 
@@ -26,6 +27,7 @@ BINDINGS = {
     "Buttons": {
         "A (accelerate)": "Z",
         "B (brake/reverse)": "X",
+        "Z Trig (use item)": "LeftShift",
         "R (hop/power slide)": "S",
         "L (map toggle)": "A",
         "Start (pause)": "Enter/Return",
@@ -41,8 +43,9 @@ BINDINGS = {
 # Keycodes to use in InputAutoCfg.ini
 KEYCODES = {
     "Start": 13,
-    "Z Trig (accelerate)": 122,  # Z
+    "A Button (accelerate)": 122,  # Z
     "B Button (brake/reverse)": 120,  # X
+    "Z Trig (use item)": 304,  # Left Shift
     "A Button (hop/slide)": 115,  # S
     "R Trig (map toggle)": 97,  # A
     "C Button U": 105,  # I
