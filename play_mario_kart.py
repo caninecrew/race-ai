@@ -1,68 +1,42 @@
-"""
-Launch Mario Kart 64 through mupen64plus so you can play manually.
-
-Assumptions:
-- The MK64 ROM has been copied to the legacy env path:
-  mk64-venv/lib/python3.8/site-packages/gym_mupen64plus/ROMs/marioKart.n64
-- Mupen64Plus and the Rice video + SDL input plugins are installed
-  (see README "Mario Kart 64" section for setup).
-
-Keyboard controls use the default SDL plugin mappings.
-"""
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
-from pathlib import Path
+
+from mk64_common import MK64Paths, build_mupen_command, find_mupen_executable, validate_manual_play_paths
 
 
 def main() -> int:
-    repo_root = Path(__file__).resolve().parent
+    paths = MK64Paths.from_env()
 
-    # Defaults that match the documented WSL setup.
-    rom_path = repo_root / "mk64-venv" / "lib" / "python3.8" / "site-packages" / "gym_mupen64plus" / "ROMs" / "marioKart.n64"
-    gfx_plugin = Path("/usr/lib/x86_64-linux-gnu/mupen64plus/mupen64plus-video-rice.so")
-    input_driver = Path("/usr/lib/x86_64-linux-gnu/mupen64plus/mupen64plus-input-sdl.so")
-    mupen_cmd = os.environ.get("MUPEN_CMD", "mupen64plus")
-
-    # Allow overrides via env vars if needed.
-    rom_path = Path(os.environ.get("MK64_ROM", rom_path))
-    gfx_plugin = Path(os.environ.get("MK64_GFX_PLUGIN", gfx_plugin))
-    input_driver = Path(os.environ.get("MK64_INPUT_DRIVER", input_driver))
-
-    missing = [p for p in (rom_path, gfx_plugin, input_driver) if not p.exists()]
+    missing = validate_manual_play_paths(paths)
     if missing:
         for p in missing:
             sys.stderr.write(f"Missing file: {p}\n")
-        sys.stderr.write("Fix the missing paths or override via MK64_ROM, MK64_GFX_PLUGIN, MK64_INPUT_DRIVER.\n")
+        sys.stderr.write(
+            "Fix the missing paths or override via environment variables:\n"
+            "  MK64_ROM, MK64_GFX_PLUGIN, MK64_INPUT_DRIVER\n"
+        )
         return 1
 
-    cmd = [
-        mupen_cmd,
-        "--nospeedlimit",
-        "--nosaveoptions",
-        "--resolution",
-        "640x480",
-        "--gfx",
-        str(gfx_plugin),
-        "--audio",
-        "dummy",
-        "--input",
-        str(input_driver),
-        str(rom_path),
-    ]
+    exe = find_mupen_executable(paths.mupen_cmd)
+    if exe is None:
+        sys.stderr.write(
+            f"Could not find mupen64plus executable '{paths.mupen_cmd}' on PATH.\n"
+            "Install Mupen64Plus and ensure it is on PATH, or set MUPEN_CMD to the full executable path.\n"
+        )
+        return 1
 
-    print("Launching mupen64plus. Close the emulator window to exit.")
+    cmd = build_mupen_command(paths)
+    print("Launching Mupen64Plus. Close the emulator window to exit.")
     print("Command:", " ".join(cmd))
+
     try:
         subprocess.run(cmd, check=True)
-    except FileNotFoundError:
-        sys.stderr.write(f"Could not find mupen64plus executable '{mupen_cmd}'. Is it installed on PATH?\n")
-        return 1
     except subprocess.CalledProcessError as exc:
         sys.stderr.write(f"mupen64plus exited with error code {exc.returncode}\n")
         return exc.returncode
+
     return 0
 
 
