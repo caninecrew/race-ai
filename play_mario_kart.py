@@ -5,6 +5,17 @@ import sys
 
 from mk64_common import MK64Paths, build_mupen_command, find_mupen_executable, validate_manual_play_paths
 
+# Default keyboard mappings for the SDL input plugin (mupen64plus-input-sdl.so):
+#   Stick:    Arrow keys (Up/Down/Left/Right)
+#   A:        Z
+#   B:        X
+#   L:        A
+#   R:        S
+#   Start:    Enter/Return
+#   C-Buttons: I (Up), K (Down), J (Left), L (Right)
+#   D-Pad:    default disabled unless configured; most play is via Stick + A/B + L/R + Start.
+# These are the defaults shipped with mupen64plus SDL input; adjust via ~/.config/mupen64plus/InputAutoCfg.ini if needed.
+
 
 def main() -> int:
     paths = MK64Paths.from_env()
