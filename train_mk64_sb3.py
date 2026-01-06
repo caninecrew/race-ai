@@ -154,9 +154,13 @@ def main() -> int:
             env.metadata["render.modes"] = sorted(modes)
 
             if not getattr(env, "_has_render_patch", False):
-                def _render(self, mode="human"):
-                    # gym_mupen64plus envs implement _render already.
-                    return self._render(mode=mode)
+                def _render(self, mode="human", **kwargs):
+                    try:
+                        # Bypass Gym's __getattr__ blocking of private attrs.
+                        render_fn = object.__getattribute__(self, "_render")
+                    except Exception:
+                        return None
+                    return render_fn(mode=mode, **kwargs)
                 env.render = types.MethodType(_render, env)
                 env._has_render_patch = True
         except Exception:
