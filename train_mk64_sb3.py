@@ -20,7 +20,13 @@ def require_sb3():
     try:
         from stable_baselines3 import PPO
         from stable_baselines3.common.callbacks import CheckpointCallback
-        from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack, VecMonitor, VecTransposeImage
+        from stable_baselines3.common.vec_env import (
+            DummyVecEnv,
+            VecFrameStack,
+            VecMonitor,
+            VecTransposeImage,
+            VecVideoRecorder,
+        )
     except Exception as exc:
         raise RuntimeError(
             "Stable Baselines3 + torch are required for training. "
@@ -43,6 +49,18 @@ def parse_args():
     p.add_argument("--frame-stack", type=int, default=4)
     p.add_argument("--models-dir", type=str, default="models_mk64")
     p.add_argument("--logs-dir", type=str, default="logs_mk64")
+    p.add_argument(
+        "--video-dir",
+        type=str,
+        default=None,
+        help="Directory to store training videos (defaults to logs_dir/videos).",
+    )
+    p.add_argument(
+        "--video-freq",
+        type=int,
+        default=0,
+        help="Record a short clip every N timesteps (set 0 to record a single full-session video).",
+    )
     p.add_argument("--checkpoints", type=int, default=100_000, help="Checkpoint frequency in timesteps.")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", type=str, default="auto")
@@ -76,8 +94,19 @@ def main() -> int:
 
     Path(args.models_dir).mkdir(parents=True, exist_ok=True)
     Path(args.logs_dir).mkdir(parents=True, exist_ok=True)
+    video_dir = Path(args.video_dir) if args.video_dir else Path(args.logs_dir) / "videos"
+    # Always prepare video dir; default behavior is to record the full session once.
+    video_dir.mkdir(parents=True, exist_ok=True)
 
-    PPO, CheckpointCallback, DummyVecEnv, VecFrameStack, VecMonitor, VecTransposeImage = require_sb3()
+    (
+        PPO,
+        CheckpointCallback,
+        DummyVecEnv,
+        VecFrameStack,
+        VecMonitor,
+        VecTransposeImage,
+        VecVideoRecorder,
+    ) = require_sb3()
 
     # If the user asked for CUDA but it is unavailable (e.g., no driver/libcuda),
     # fall back to CPU so training can proceed instead of crashing.
@@ -109,6 +138,11 @@ def main() -> int:
             return _normalize_obs(obs)
 
         def _step(action):
+            # gym_mupen64plus MK64 env expects a Python list so it can append extra
+            # controller slots; SB3 hands us a numpy array. Converting avoids shape
+            # broadcast errors when the env does `action + [0, ...]`.
+            if isinstance(action, np.ndarray):
+                action = action.tolist()
             result = original_step(action)
             if isinstance(result, tuple) and len(result) == 5:
                 obs, reward, terminated, truncated, info = result
@@ -128,6 +162,27 @@ def main() -> int:
 
     vec = DummyVecEnv([make_env])
     vec = VecMonitor(vec)
+
+    # Record short videos during training to spot regressions/bugs.
+    # Video recording: by default record one full-session video.
+    if args.video_freq and args.video_freq > 0:
+        # Clip every N timesteps.
+        def _video_trigger(step: int) -> bool:
+            return step == 0 or (step % args.video_freq == 0)
+        video_length = 600
+    else:
+        # Single video from start through entire training budget (may be large).
+        def _video_trigger(step: int) -> bool:
+            return step == 0
+        video_length = max(int(args.timesteps), 1)
+
+    vec = VecVideoRecorder(
+        vec,
+        video_folder=str(video_dir),
+        record_video_trigger=_video_trigger,
+        video_length=video_length,
+        name_prefix="train",
+    )
 
     # If observations are images in HWC (common), transpose to CHW for SB3 CNN.
     # If your env already returns CHW, this still typically works; if not, disable this line.
