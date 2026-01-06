@@ -33,7 +33,7 @@ def require_sb3():
             "Install them inside mk64-venv (choose versions compatible with your CUDA/CPU stack)."
         ) from exc
 
-    return PPO, CheckpointCallback, DummyVecEnv, VecFrameStack, VecMonitor, VecTransposeImage
+    return PPO, CheckpointCallback, DummyVecEnv, VecFrameStack, VecMonitor, VecTransposeImage, VecVideoRecorder
 
 
 def parse_args():
