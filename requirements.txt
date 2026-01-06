@@ -14,3 +14,5 @@ pyglet==2.1.11
 stable-baselines3==1.6.2
 torch==1.13.1
 tensorboard==2.11.2
+tqdm==4.64.1
+rich==12.5.1

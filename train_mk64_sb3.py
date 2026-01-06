@@ -46,6 +46,7 @@ def parse_args():
     p.add_argument("--checkpoints", type=int, default=100_000, help="Checkpoint frequency in timesteps.")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", type=str, default="auto")
+    p.add_argument("--progress-bar", action="store_true", help="Enable SB3 progress bar (requires tqdm and rich).")
     p.add_argument("--list-envs", action="store_true", help="List available env ids and exit.")
     return p.parse_args()
 
@@ -77,6 +78,18 @@ def main() -> int:
     Path(args.logs_dir).mkdir(parents=True, exist_ok=True)
 
     PPO, CheckpointCallback, DummyVecEnv, VecFrameStack, VecMonitor, VecTransposeImage = require_sb3()
+
+    # If the user asked for CUDA but it is unavailable (e.g., no driver/libcuda),
+    # fall back to CPU so training can proceed instead of crashing.
+    try:
+        import torch
+
+        if str(args.device).startswith("cuda") and not torch.cuda.is_available():
+            print("CUDA requested but not available; falling back to CPU.")
+            args.device = "cpu"
+    except Exception:
+        # If torch import itself fails, SB3 will raise later; ignore here.
+        pass
 
     def make_env():
         env = gym.make(args.env_id)
@@ -146,7 +159,7 @@ def main() -> int:
         save_vecnormalize=False,
     )
 
-    model.learn(total_timesteps=args.timesteps, callback=ckpt, progress_bar=True)
+    model.learn(total_timesteps=args.timesteps, callback=ckpt, progress_bar=args.progress_bar)
 
     out = Path(args.models_dir) / "mk64_ppo_latest.zip"
     model.save(out)
