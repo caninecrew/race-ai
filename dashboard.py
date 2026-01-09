@@ -120,6 +120,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/heatmap":
             model_path = ROOT / "models" / "ppo_pong_custom_latest.zip"
+            best = _read_metrics(ROOT / "logs" / "metrics.csv")
+            if best and best.get("model_id"):
+                model_path = ROOT / "models" / f"{best['model_id']}_latest.zip"
             try:
                 heat = _heatmap_from_model(model_path)
                 self._send(200, json.dumps({"heatmap": heat}).encode("utf-8"), "application/json")
@@ -441,7 +444,7 @@ function drawLineChart(canvas, xs, ys, color) {
   ctx.beginPath();
   xs.forEach((x, i) => {
     const nx = i / (xs.length - 1 || 1);
-    const ny = (ys[i] - minY) / ((maxY - minY) || 1);
+    const ny = (maxY === minY) ? 0.5 : (ys[i] - minY) / (maxY - minY);
     const px = pad + nx * w;
     const py = pad + (1 - ny) * h;
     if (i === 0) ctx.moveTo(px, py);
@@ -453,7 +456,7 @@ function drawLineChart(canvas, xs, ys, color) {
   // Draw points so single-cycle data is visible.
   xs.forEach((x, i) => {
     const nx = i / (xs.length - 1 || 1);
-    const ny = (ys[i] - minY) / ((maxY - minY) || 1);
+    const ny = (maxY === minY) ? 0.5 : (ys[i] - minY) / (maxY - minY);
     const px = pad + nx * w;
     const py = pad + (1 - ny) * h;
     ctx.fillStyle = color;
