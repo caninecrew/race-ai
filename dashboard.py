@@ -1,6 +1,7 @@
 import argparse
 import csv
 import json
+import time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Optional, List
@@ -14,6 +15,8 @@ from pong import simple_tracking_policy
 
 
 ROOT = Path.cwd()
+_HEATMAP_CACHE: Optional[List[List[int]]] = None
+_HEATMAP_TS = 0.0
 
 
 def _latest_report(log_dir: Path) -> Optional[Path]:
@@ -38,23 +41,31 @@ def _read_metrics(metrics_csv: Path) -> dict:
 
 
 def _heatmap_from_model(model_path: Path, steps: int = 1500, bins: int = 40) -> List[List[int]]:
+    global _HEATMAP_CACHE, _HEATMAP_TS
+    now = time.time()
+    if _HEATMAP_CACHE is not None and (now - _HEATMAP_TS) < 10:
+        return _HEATMAP_CACHE
     if not model_path.exists():
         return []
     env = SB3PongEnv(opponent_policy=simple_tracking_policy, render_mode=None)
-    model = PPO.load(str(model_path), env=env, device="cpu")
-    obs, _ = env.reset()
-    heat = np.zeros((bins, bins), dtype=np.int32)
-    for _ in range(steps):
-        action, _ = model.predict(obs, deterministic=True)
-        obs, _, terminated, truncated, _ = env.step(action)
-        bx, by = obs[0], obs[1]
-        x = min(bins - 1, max(0, int(bx * bins)))
-        y = min(bins - 1, max(0, int(by * bins)))
-        heat[y, x] += 1
-        if terminated or truncated:
-            obs, _ = env.reset()
-    env.close()
-    return heat.tolist()
+    try:
+        model = PPO.load(str(model_path), env=env, device="cpu")
+        obs, _ = env.reset()
+        heat = np.zeros((bins, bins), dtype=np.int32)
+        for _ in range(steps):
+            action, _ = model.predict(obs, deterministic=True)
+            obs, _, terminated, truncated, _ = env.step(action)
+            bx, by = obs[0], obs[1]
+            x = min(bins - 1, max(0, int(bx * bins)))
+            y = min(bins - 1, max(0, int(by * bins)))
+            heat[y, x] += 1
+            if terminated or truncated:
+                obs, _ = env.reset()
+        _HEATMAP_CACHE = heat.tolist()
+        _HEATMAP_TS = now
+        return _HEATMAP_CACHE
+    finally:
+        env.close()
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -95,6 +106,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                                     "model_id": row.get("model_id", ""),
                                     "avg_reward": float(row.get("avg_reward", 0.0)),
                                     "win_rate": float(row.get("win_rate", 0.0)),
+                                    "avg_rally_length": float(row.get("avg_rally_length", 0.0)),
+                                    "avg_return_rate": float(row.get("avg_return_rate", 0.0)),
+                                    "delta_reward": float(row.get("delta_reward", 0.0)) if row.get("delta_reward") else 0.0,
                                 }
                             )
                         except Exception:
@@ -143,6 +157,11 @@ def _dashboard_html() -> str:
       margin: 0; font-family: 'Segoe UI', sans-serif; background: radial-gradient(circle at top, #151b24, #0b0f14);
       color: var(--text);
     }
+    .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+    .sidebar { background: #0f141b; padding: 16px; border-right: 1px solid #1f2a36; }
+    .sidebar h2 { font-size: 12px; letter-spacing: 2px; color: #8aa3c5; text-transform: uppercase; }
+    .menu button { width: 100%; margin: 6px 0; padding: 10px; background: #121820; color: var(--text); border: 1px solid #1f2a36; border-radius: 8px; cursor: pointer; }
+    .menu button.active { border-color: var(--accent); color: var(--accent); }
     .wrap { padding: 20px; max-width: 1200px; margin: 0 auto; }
     h1 { letter-spacing: 2px; text-transform: uppercase; font-size: 20px; color: var(--accent); }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
@@ -152,54 +171,105 @@ def _dashboard_html() -> str:
     canvas { width: 100%; height: auto; background: #0f141b; border-radius: 8px; }
     video { width: 100%; border-radius: 8px; border: 1px solid #203040; }
     .label { font-size: 12px; text-transform: uppercase; color: #8aa3c5; letter-spacing: 1px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 6px 8px; border-bottom: 1px solid #1f2a36; text-align: left; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Live Pong Training Dashboard</h1>
-    <div class="grid">
-      <div class="card">
-        <div class="label">Best Model</div>
-        <div id="bestModel" class="stat">--</div>
-        <div class="label">Avg Reward</div>
-        <div id="bestReward">--</div>
-        <div class="label">Win Rate</div>
-        <div id="bestWin">--</div>
-      </div>
-      <div class="card">
-        <div class="label">Latest Run</div>
-        <div id="runId">--</div>
-        <div class="label">Stop Reason</div>
-        <div id="stopReason">--</div>
-      </div>
-      <div class="card">
-        <div class="label">Animated Heatmap</div>
-        <canvas id="heatmap" width="400" height="400"></canvas>
+  <div class="layout">
+    <div class="sidebar">
+      <h2>Dashboard</h2>
+      <div class="menu">
+        <button data-panel="overview" class="active">Overview</button>
+        <button data-panel="charts">Charts</button>
+        <button data-panel="videos">Videos</button>
+        <button data-panel="table">Recent Metrics</button>
       </div>
     </div>
-    <div class="card" style="margin-top:16px;">
-      <div class="label">Training Charts</div>
-      <div class="split">
-        <div>
-          <div class="label">Avg Reward (per cycle)</div>
-          <canvas id="chartReward" width="500" height="200"></canvas>
-        </div>
-        <div>
-          <div class="label">Win Rate (per cycle)</div>
-          <canvas id="chartWin" width="500" height="200"></canvas>
+    <div class="wrap">
+      <h1>Live Pong Training Dashboard</h1>
+      <div id="panel-overview" class="panel active">
+        <div class="grid">
+          <div class="card">
+            <div class="label">Best Model</div>
+            <div id="bestModel" class="stat">--</div>
+            <div class="label">Avg Reward</div>
+            <div id="bestReward">--</div>
+            <div class="label">Win Rate</div>
+            <div id="bestWin">--</div>
+          </div>
+          <div class="card">
+            <div class="label">Latest Run</div>
+            <div id="runId">--</div>
+            <div class="label">Stop Reason</div>
+            <div id="stopReason">--</div>
+          </div>
+          <div class="card">
+            <div class="label">Animated Heatmap</div>
+            <canvas id="heatmap" width="400" height="400"></canvas>
+            <div id="heatmapNote" class="label" style="margin-top:6px;">--</div>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="card" style="margin-top:16px;">
-      <div class="label">Comparative Split</div>
-      <div class="split">
-        <div>
-          <div class="label">Latest Combined</div>
-          <video id="vidCombined" controls muted></video>
+      <div id="panel-charts" class="panel">
+        <div class="card">
+          <div class="label">Training Charts</div>
+          <div class="split">
+            <div>
+              <div class="label">Avg Reward (per cycle)</div>
+              <canvas id="chartReward" width="500" height="200"></canvas>
+            </div>
+            <div>
+              <div class="label">Win Rate (per cycle)</div>
+              <canvas id="chartWin" width="500" height="200"></canvas>
+            </div>
+          </div>
+          <div class="split" style="margin-top:12px;">
+            <div>
+              <div class="label">Delta Reward (per cycle)</div>
+              <canvas id="chartDelta" width="500" height="200"></canvas>
+            </div>
+            <div>
+              <div class="label">Avg Rally Length (per cycle)</div>
+              <canvas id="chartRally" width="500" height="200"></canvas>
+            </div>
+          </div>
         </div>
-        <div>
-          <div class="label">Extended Eval</div>
-          <video id="vidEval" controls muted></video>
+      </div>
+      <div id="panel-videos" class="panel">
+        <div class="card">
+          <div class="label">Comparative Split</div>
+          <div class="split">
+            <div>
+              <div class="label">Latest Combined</div>
+              <video id="vidCombined" controls muted></video>
+            </div>
+            <div>
+              <div class="label">Extended Eval</div>
+              <video id="vidEval" controls muted></video>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="panel-table" class="panel">
+        <div class="card">
+          <div class="label">Recent Metrics</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Cycle</th>
+                <th>Model</th>
+                <th>Avg Reward</th>
+                <th>Delta</th>
+                <th>Win Rate</th>
+                <th>Rally</th>
+                <th>Return</th>
+              </tr>
+            </thead>
+            <tbody id="metricsTable"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -236,7 +306,11 @@ async function refreshHeatmap() {
   const canvas = document.getElementById('heatmap');
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  if (!heat.length) return;
+  if (!heat.length) {
+    document.getElementById('heatmapNote').textContent = 'No heatmap yet (train a model first).';
+    return;
+  }
+  document.getElementById('heatmapNote').textContent = 'Live density from latest model.';
   const rows = heat.length;
   const cols = heat[0].length;
   const max = Math.max(...heat.flat());
@@ -255,10 +329,28 @@ refreshStatus();
 refreshHeatmap();
 refreshCharts();
 
+document.querySelectorAll('.menu button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.menu button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const panel = btn.getAttribute('data-panel');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(`panel-${panel}`).classList.add('active');
+  });
+});
+
 async function refreshCharts() {
   const res = await fetch('/api/metrics');
   const data = await res.json();
   const series = data.series || [];
+  const table = document.getElementById('metricsTable');
+  table.innerHTML = '';
+  const recent = series.slice(-15).reverse();
+  for (const row of recent) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${row.cycle}</td><td>${row.model_id}</td><td>${row.avg_reward.toFixed(2)}</td><td>${row.delta_reward.toFixed(2)}</td><td>${row.win_rate.toFixed(2)}</td><td>${row.avg_rally_length.toFixed(1)}</td><td>${row.avg_return_rate.toFixed(2)}</td>`;
+    table.appendChild(tr);
+  }
   const byCycle = new Map();
   for (const row of series) {
     if (!byCycle.has(row.cycle)) byCycle.set(row.cycle, []);
@@ -275,8 +367,20 @@ async function refreshCharts() {
     const best = rows.reduce((acc, r) => Math.max(acc, r.win_rate), 0);
     return best;
   });
+  const deltas = cycles.map(c => {
+    const rows = byCycle.get(c);
+    const best = rows.reduce((acc, r) => Math.max(acc, r.delta_reward), -999);
+    return best;
+  });
+  const rallies = cycles.map(c => {
+    const rows = byCycle.get(c);
+    const best = rows.reduce((acc, r) => Math.max(acc, r.avg_rally_length), 0);
+    return best;
+  });
   drawLineChart(document.getElementById('chartReward'), cycles, rewards, '#14f195');
   drawLineChart(document.getElementById('chartWin'), cycles, wins, '#f5a623');
+  drawLineChart(document.getElementById('chartDelta'), cycles, deltas, '#7cc6ff');
+  drawLineChart(document.getElementById('chartRally'), cycles, rallies, '#ff5f7a');
 }
 
 function drawLineChart(canvas, xs, ys, color) {
