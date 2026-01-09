@@ -95,6 +95,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/metrics":
             metrics_csv = ROOT / "logs" / "metrics.csv"
             series = []
+            err = None
             if metrics_csv.exists():
                 with metrics_csv.open("r", encoding="utf-8") as fh:
                     reader = csv.DictReader(fh)
@@ -113,7 +114,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             )
                         except Exception:
                             continue
-            self._send(200, json.dumps({"series": series}).encode("utf-8"), "application/json")
+            else:
+                err = "metrics.csv not found"
+            self._send(200, json.dumps({"series": series, "error": err}).encode("utf-8"), "application/json")
             return
         if parsed.path == "/api/heatmap":
             model_path = ROOT / "models" / "ppo_pong_custom_latest.zip"
@@ -178,16 +181,18 @@ def _dashboard_html() -> str:
   </style>
 </head>
 <body>
-  <div class="layout">
-    <div class="sidebar">
-      <h2>Dashboard</h2>
-      <div class="menu">
-        <button data-panel="overview" class="active">Overview</button>
-        <button data-panel="charts">Charts</button>
-        <button data-panel="videos">Videos</button>
-        <button data-panel="table">Recent Metrics</button>
+    <div class="layout">
+      <div class="sidebar">
+        <h2>Dashboard</h2>
+        <div class="menu">
+          <button data-panel="overview" class="active">Overview</button>
+          <button data-panel="charts">Charts</button>
+          <button data-panel="videos">Videos</button>
+          <button data-panel="table">Recent Metrics</button>
+        </div>
+        <div class="label" id="statusLine" style="margin-top:12px;">Status: --</div>
+        <div class="label" id="dataLine">Data: --</div>
       </div>
-    </div>
     <div class="wrap">
       <h1>Live Pong Training Dashboard</h1>
       <div id="panel-overview" class="panel active">
@@ -277,37 +282,52 @@ def _dashboard_html() -> str:
 <script>
 let lastCombined = "";
 let lastEval = "";
+let lastStatusTick = 0;
 
 async function refreshStatus() {
-  const res = await fetch('/api/status');
-  const data = await res.json();
-  const metrics = data.metrics || {};
-  const report = (data.report || {}).summary || {};
-  document.getElementById('bestModel').textContent = metrics.model_id || 'n/a';
-  document.getElementById('bestReward').textContent = metrics.avg_reward || '--';
-  document.getElementById('bestWin').textContent = metrics.win_rate || '--';
-  document.getElementById('runId').textContent = report.run_timestamp || '--';
-  document.getElementById('stopReason').textContent = report.stop_reason || '--';
-  const combined = report.last_combined_video;
-  const evalVid = report.last_eval_video;
-  if (combined && combined !== lastCombined) {
-    document.getElementById('vidCombined').src = '/file?path=' + encodeURIComponent(combined);
-    lastCombined = combined;
-  }
-  if (evalVid && evalVid !== lastEval) {
-    document.getElementById('vidEval').src = '/file?path=' + encodeURIComponent(evalVid);
-    lastEval = evalVid;
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    const metrics = data.metrics || {};
+    const report = (data.report || {}).summary || {};
+    document.getElementById('bestModel').textContent = metrics.model_id || 'n/a';
+    document.getElementById('bestReward').textContent = metrics.avg_reward || '--';
+    document.getElementById('bestWin').textContent = metrics.win_rate || '--';
+    document.getElementById('runId').textContent = report.run_timestamp || '--';
+    document.getElementById('stopReason').textContent = report.stop_reason || '--';
+    const combined = report.last_combined_video;
+    const evalVid = report.last_eval_video;
+    if (combined && combined !== lastCombined) {
+      document.getElementById('vidCombined').src = '/file?path=' + encodeURIComponent(combined);
+      lastCombined = combined;
+    }
+    if (evalVid && evalVid !== lastEval) {
+      document.getElementById('vidEval').src = '/file?path=' + encodeURIComponent(evalVid);
+      lastEval = evalVid;
+    }
+    lastStatusTick = Date.now();
+    document.getElementById('statusLine').textContent = `Status: OK (${new Date().toLocaleTimeString()})`;
+  } catch (err) {
+    document.getElementById('statusLine').textContent = `Status: ERROR (${err})`;
   }
 }
 async function refreshHeatmap() {
-  const res = await fetch('/api/heatmap');
-  const data = await res.json();
+  let data = null;
+  try {
+    const res = await fetch('/api/heatmap');
+    data = await res.json();
+  } catch (err) {
+    document.getElementById('heatmapNote').textContent = 'Heatmap fetch failed.';
+    drawEmpty(document.getElementById('heatmap'), 'Heatmap error');
+    return;
+  }
   const heat = data.heatmap || [];
   const canvas = document.getElementById('heatmap');
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
   if (!heat.length) {
     document.getElementById('heatmapNote').textContent = 'No heatmap yet (train a model first).';
+    drawEmpty(canvas, 'No heatmap data');
     return;
   }
   document.getElementById('heatmapNote').textContent = 'Live density from latest model.';
@@ -340,9 +360,25 @@ document.querySelectorAll('.menu button').forEach(btn => {
 });
 
 async function refreshCharts() {
-  const res = await fetch('/api/metrics');
-  const data = await res.json();
+  let data = null;
+  try {
+    const res = await fetch('/api/metrics');
+    data = await res.json();
+  } catch (err) {
+    drawEmpty(document.getElementById('chartReward'), 'Metrics fetch failed');
+    drawEmpty(document.getElementById('chartWin'), 'Metrics fetch failed');
+    drawEmpty(document.getElementById('chartDelta'), 'Metrics fetch failed');
+    drawEmpty(document.getElementById('chartRally'), 'Metrics fetch failed');
+    return;
+  }
   const series = data.series || [];
+  document.getElementById('dataLine').textContent = `Data: ${series.length} rows`;
+  if (!series.length) {
+    drawEmpty(document.getElementById('chartReward'), 'No metrics yet');
+    drawEmpty(document.getElementById('chartWin'), 'No metrics yet');
+    drawEmpty(document.getElementById('chartDelta'), 'No metrics yet');
+    drawEmpty(document.getElementById('chartRally'), 'No metrics yet');
+  }
   const table = document.getElementById('metricsTable');
   table.innerHTML = '';
   const recent = series.slice(-15).reverse();
@@ -406,6 +442,16 @@ function drawLineChart(canvas, xs, ys, color) {
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.stroke();
+}
+
+function drawEmpty(canvas, label) {
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = '#243447';
+  ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+  ctx.fillStyle = '#8aa3c5';
+  ctx.font = '12px Segoe UI';
+  ctx.fillText(label, 30, canvas.height / 2);
 }
 </script>
 </body>
