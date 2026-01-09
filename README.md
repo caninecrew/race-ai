@@ -4,7 +4,7 @@ Lightweight reinforcement learning setup for training PPO agents on a custom Pon
 
 ## Requirements
 - Python 3.9+
-- `pip install -r requirements` equivalent packages: `pygame`, `gymnasium`, `stable-baselines3`, `imageio`, `Pillow`, `numpy`, `torch`, `PyYAML` (for YAML configs)
+- Recommended: create a virtual environment and install dependencies with `pip install -r requirements.txt`.
 
 ## Usage
 - Demo the environment: `python pong.py` (controls: W/S left, Up/Down right; auto-tracks when headless).
@@ -23,6 +23,13 @@ Lightweight reinforcement learning setup for training PPO agents on a custom Pon
 - Gymnasium/pygame versions: stick to recent gymnasium (>=0.29) and pygame (>=2.5) to avoid shape or surface issues.
 - Stable Baselines3 and torch: CPU-only installs work; for GPU, set `--device cuda` and ensure CUDA-enabled torch is installed.
 - Resume training: keep `_latest` checkpoints; rerun training with the same `model_dir` to continue. Passing `--no-checkpoint` skips timestamped saves but still updates `_latest`.
+
+## Quickstart (venv)
+```
+python -m venv .venv
+.\.venv\Scripts\activate   # or source .venv/bin/activate on *nix
+pip install -r requirements.txt
+```
 
 ## Smoke Tests
 - Quick checks for shapes, deterministic seeds, and paddle bounds: `python -m pytest tests/test_pong_env.py`.

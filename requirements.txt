@@ -1,0 +1,18 @@
+# Core RL and environment stack
+stable-baselines3>=2.3.0
+torch>=2.1
+gymnasium>=0.29
+numpy>=1.26
+
+# Game/visualization
+pygame>=2.5
+pillow>=10.0.0
+imageio>=2.31
+imageio-ffmpeg>=0.4.9
+
+# Logging / configs
+tensorboard>=2.15
+pyyaml>=6.0.1
+
+# Tooling / tests
+pytest>=7.4
