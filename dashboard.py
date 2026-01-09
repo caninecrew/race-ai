@@ -1,6 +1,7 @@
 import argparse
 import csv
 import json
+import math
 import time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -63,6 +64,16 @@ def _latest_report_info(log_dir: Path) -> Dict[str, Any]:
         return json.loads(report_path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+def _sanitize_json(value: Any) -> Any:
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {k: _sanitize_json(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_json(v) for v in value]
+    return value
 
 
 def _list_reports(log_dir: Path) -> List[Dict[str, Any]]:
@@ -169,7 +180,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 },
                 "last_update": last_update,
             }
-            self._send(200, json.dumps(payload).encode("utf-8"), "application/json")
+            self._send(200, json.dumps(_sanitize_json(payload), allow_nan=False).encode("utf-8"), "application/json")
             return
         if parsed.path == "/api/metrics":
             metrics_csv = ROOT / "logs" / "metrics.csv"
@@ -212,7 +223,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/reports":
             reports = _list_reports(ROOT / "logs")
-            self._send(200, json.dumps({"reports": reports}).encode("utf-8"), "application/json")
+            self._send(
+                200,
+                json.dumps(_sanitize_json({"reports": reports}), allow_nan=False).encode("utf-8"),
+                "application/json",
+            )
             return
         if parsed.path == "/api/annotations":
             payload = _read_annotations()
