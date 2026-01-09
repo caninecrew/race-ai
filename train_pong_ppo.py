@@ -82,7 +82,7 @@ class SB3PongEnv(gym.Env):
             raise RuntimeError("Call reset() before step().")
 
         action_int = int(action.item()) if isinstance(action, np.ndarray) else int(action)
-        right_action = self.opponent_policy(self.last_obs, is_left=False)
+        right_action = self.opponent_policy(self.last_obs, False)
         obs, reward, done, info = self.env.step(action_int, right_action)
         self.last_obs = obs
 
@@ -523,18 +523,19 @@ def main():
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=cfg.iterations_per_set) as executor:
             futures = []
+            seed_by_future: Dict[concurrent.futures.Future, int] = {}
             for idx, model_id in enumerate(model_ids):
                 color = ball_colors[idx % len(ball_colors)]
                 derived_seed = base_seed + idx + cycle
-                futures.append(
-                    executor.submit(
-                        _train_single,
-                        model_id=model_id,
-                        color=color,
-                        cfg=cfg,
-                        seed=derived_seed,
-                    )
+                future = executor.submit(
+                    _train_single,
+                    model_id=model_id,
+                    color=color,
+                    cfg=cfg,
+                    seed=derived_seed,
                 )
+                futures.append(future)
+                seed_by_future[future] = derived_seed
 
             for future in concurrent.futures.as_completed(futures):
                 model_id, metrics, segment, ponged, stamp, latest_path, stamped_path = future.result()
@@ -547,7 +548,8 @@ def main():
                     segments_by_model[model_id] = segment
                 pong_flags.append(ponged)
                 timestamp = stamp  # use last reported for video naming
-                print(f"[{model_id}] Added {len(segment)} frames; Ponged: {ponged}; seed={derived_seed}")
+                seed_used = seed_by_future.get(future, base_seed)
+                print(f"[{model_id}] Added {len(segment)} frames; Ponged: {ponged}; seed={seed_used}")
 
         if combined_frames_per_model and any(combined_frames_per_model):
             grid_frames = build_grid_frames(combined_frames_per_model)
