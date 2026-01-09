@@ -342,39 +342,48 @@ def _dashboard_html() -> str:
       </div>
     <div class="wrap">
       <h1>Live Pong Training Dashboard</h1>
+      <div class="tiny" style="margin-bottom:12px;">
+        This page tracks how the AI is learning to play Pong. Each "cycle" is one round of training and testing.
+      </div>
       <div id="panel-overview" class="panel active">
         <div class="kpi-strip">
           <div class="card">
             <div class="label">Best Reward</div>
             <div id="kpiBestReward" class="stat">--</div>
             <div class="tiny" id="kpiBestRewardCi">--</div>
+            <div class="tiny">Highest score from the latest cycle (bigger is better).</div>
           </div>
           <div class="card">
             <div class="label">Avg Reward</div>
             <div id="kpiAvgReward" class="stat">--</div>
             <div class="tiny" id="kpiAvgRewardDelta">--</div>
+            <div class="tiny">Average score across all models in the latest cycle.</div>
           </div>
           <div class="card">
             <div class="label">Win Rate</div>
             <div id="kpiWinRate" class="stat">--</div>
             <div class="tiny" id="kpiWinRateDelta">--</div>
+            <div class="tiny">Fraction of games the AI wins (1.00 = 100%).</div>
           </div>
           <div class="card">
             <div class="label">Return Rate</div>
             <div id="kpiReturnRate" class="stat">--</div>
             <div class="tiny" id="kpiReturnRateCi">--</div>
+            <div class="tiny">How often the AI hits the ball back.</div>
           </div>
           <div class="card">
             <div class="label">Rally Length</div>
             <div id="kpiRally" class="stat">--</div>
             <div class="tiny" id="kpiRallyDelta">--</div>
+            <div class="tiny">Average number of hits before a point ends.</div>
           </div>
         </div>
         <div class="grid" style="margin-top:16px;">
           <div class="card">
             <div class="label">Best Model</div>
             <div id="bestModel" class="stat">--</div>
-            <div class="label">Avg Reward</div>
+            <div class="tiny">Model with the highest reward so far.</div>
+            <div class="label" style="margin-top:8px;">Avg Reward</div>
             <div id="bestReward">--</div>
             <div class="label">Win Rate</div>
             <div id="bestWin">--</div>
@@ -382,13 +391,15 @@ def _dashboard_html() -> str:
           <div class="card">
             <div class="label">Latest Run</div>
             <div id="runId">--</div>
-            <div class="label">Stop Reason</div>
+            <div class="tiny">Most recent training session.</div>
+            <div class="label" style="margin-top:8px;">Stop Reason</div>
             <div id="stopReason">--</div>
             <div class="label" style="margin-top:8px;">Data Sources</div>
             <div id="dataSources" class="tiny">--</div>
           </div>
           <div class="card">
             <div class="label">Heatmaps</div>
+            <div class="tiny">Where the ball and paddles spend time. Brighter means more activity.</div>
             <div class="menu" style="margin-bottom:8px;">
               <button data-heat="ball" class="active">Ball Density</button>
               <button data-heat="paddles">Paddle Density</button>
@@ -408,6 +419,7 @@ def _dashboard_html() -> str:
           </div>
           <div class="card">
             <div class="label">Quality Gates</div>
+            <div class="tiny">Set minimum targets to see if the latest model passes.</div>
             <div class="controls">
               <input id="gateReward" type="number" step="0.1" placeholder="Reward > X"/>
               <input id="gateWin" type="number" step="0.01" placeholder="Win rate > Y"/>
@@ -419,6 +431,7 @@ def _dashboard_html() -> str:
       <div id="panel-charts" class="panel">
         <div class="card">
           <div class="label">Training Charts</div>
+          <div class="tiny">Trends over time. Use the selector to compare best vs average runs.</div>
           <div class="controls">
             <select id="compareMode">
               <option value="best">Best</option>
@@ -452,6 +465,7 @@ def _dashboard_html() -> str:
         <div class="grid" style="margin-top:16px;">
           <div class="card">
             <div class="label">Cycle Distribution</div>
+            <div class="tiny">How spread out the scores are within one cycle.</div>
             <div class="controls">
               <select id="cycleSelect"></select>
             </div>
@@ -468,6 +482,7 @@ def _dashboard_html() -> str:
           </div>
           <div class="card">
             <div class="label">Correlations</div>
+            <div class="tiny">See if longer rallies or better returns link to higher reward.</div>
             <div class="split">
               <div>
                 <div class="label">Reward vs Rally Length</div>
@@ -485,6 +500,7 @@ def _dashboard_html() -> str:
         <div class="grid">
           <div class="card">
             <div class="label">Model Leaderboard</div>
+            <div class="tiny">Top models by average reward.</div>
             <table>
               <thead>
                 <tr>
@@ -499,18 +515,21 @@ def _dashboard_html() -> str:
           </div>
           <div class="card">
             <div class="label">Run Timeline</div>
+            <div class="tiny">Click a cycle to see a quick summary.</div>
             <div id="timeline" class="timeline"></div>
             <div id="timelineDetail" class="tiny" style="margin-top:8px;">--</div>
           </div>
           <div class="card">
             <div class="label">Video Insights</div>
+            <div class="tiny">Highlights from the longest rallies.</div>
             <div id="videoInsights" class="tiny">--</div>
           </div>
           <div class="card">
             <div class="label">Annotations</div>
+            <div class="tiny">Leave short observations as you watch training.</div>
             <div class="controls">
               <input id="noteCycle" type="number" placeholder="Cycle #"/>
-              <input id="noteText" type="text" placeholder="Note..."/>
+              <input id="noteText" type="text" placeholder="What stood out?"/>
               <button id="noteSave" class="pill">Save</button>
             </div>
             <div id="notesList" class="tiny">--</div>
@@ -520,6 +539,7 @@ def _dashboard_html() -> str:
       <div id="panel-cohorts" class="panel">
         <div class="card">
           <div class="label">Cohort Comparison</div>
+          <div class="tiny">Pick two runs to compare average performance.</div>
           <div class="controls">
             <select id="cohortA"></select>
             <select id="cohortB"></select>
@@ -539,13 +559,16 @@ def _dashboard_html() -> str:
       <div id="panel-videos" class="panel">
         <div class="card">
           <div class="label">Comparative Split</div>
+          <div class="tiny">Side-by-side videos from the latest evaluation.</div>
           <div class="split">
             <div>
               <div class="label">Latest Combined</div>
+              <div class="tiny">Short clip of the newest run.</div>
               <video id="vidCombined" controls muted></video>
             </div>
             <div>
               <div class="label">Extended Eval</div>
+              <div class="tiny">Longer clip for deeper review.</div>
               <video id="vidEval" controls muted></video>
             </div>
           </div>
@@ -554,6 +577,7 @@ def _dashboard_html() -> str:
       <div id="panel-table" class="panel">
         <div class="card">
           <div class="label">Recent Metrics</div>
+          <div class="tiny">Raw numbers per cycle. Scroll to see older entries.</div>
           <div class="controls">
             <button id="downloadCsv" class="pill">Download CSV</button>
             <select id="snapshotSelect"></select>
@@ -1159,6 +1183,10 @@ function updateCohorts() {
   const selectB = document.getElementById('cohortB');
   [selectA, selectB].forEach(sel => {
     sel.innerHTML = '';
+    const optAll = document.createElement('option');
+    optAll.value = 'all';
+    optAll.textContent = 'All Runs';
+    sel.appendChild(optAll);
     reportCache.forEach(rep => {
       const opt = document.createElement('option');
       opt.value = rep.run_timestamp || '';
@@ -1167,8 +1195,11 @@ function updateCohorts() {
     });
   });
   if (reportCache.length) {
-    selectA.value = reportCache[0].run_timestamp || '';
-    selectB.value = reportCache[Math.min(1, reportCache.length - 1)].run_timestamp || '';
+    selectA.value = reportCache[0].run_timestamp || 'all';
+    selectB.value = reportCache[Math.min(1, reportCache.length - 1)].run_timestamp || 'all';
+  } else {
+    selectA.value = 'all';
+    selectB.value = 'all';
   }
   renderCohortTable();
 }
