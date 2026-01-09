@@ -218,6 +218,7 @@ class TrainConfig:
     device: str = "auto"
     target_fps: int = 30
     max_video_seconds: int = 120
+    video_steps: int = 400
     max_cycles: int = 1
     checkpoint_interval: int = 1  # cycles between timestamped checkpoints
     iterations_per_set: int = 6  # how many parallel model lines to train each cycle
@@ -278,6 +279,7 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--device", type=str, default=file_cfg.get("device", TrainConfig.device))
     parser.add_argument("--target-fps", type=int, default=file_cfg.get("target_fps", TrainConfig.target_fps))
     parser.add_argument("--max-video-seconds", type=int, default=file_cfg.get("max_video_seconds", TrainConfig.max_video_seconds))
+    parser.add_argument("--video-steps", type=int, default=file_cfg.get("video_steps", TrainConfig.video_steps))
     parser.add_argument("--max-cycles", type=int, default=file_cfg.get("max_cycles", TrainConfig.max_cycles))
     parser.add_argument("--checkpoint-interval", type=int, default=file_cfg.get("checkpoint_interval", TrainConfig.checkpoint_interval))
     parser.add_argument("--iterations-per-set", type=int, default=file_cfg.get("iterations_per_set", TrainConfig.iterations_per_set))
@@ -307,6 +309,7 @@ def parse_args() -> TrainConfig:
         device=args.device,
         target_fps=args.target_fps,
         max_video_seconds=args.max_video_seconds,
+        video_steps=args.video_steps,
         max_cycles=args.max_cycles,
         checkpoint_interval=args.checkpoint_interval,
         iterations_per_set=args.iterations_per_set,
@@ -477,7 +480,7 @@ def _train_single(
     segment, ponged = record_video_segment(
         model,
         ball_color=color,
-        steps=400,
+        steps=cfg.video_steps,
         overlay_text=f"{model_id} | r {metrics['avg_reward']:.2f} | win {metrics['win_rate']:.2f}",
     )
     env.close()
