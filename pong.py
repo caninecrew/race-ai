@@ -383,5 +383,65 @@ def play_demo(render: bool = True) -> None:
             obs, _ = env.reset()
 
 
+def play_human_vs_model(model_path: str, human_left: bool = True) -> None:
+    env = PongEnv(render_mode="human")
+    from stable_baselines3 import PPO
+
+    model = PPO.load(model_path, device="cpu")
+    obs, _ = env.reset()
+    while True:
+        pygame.event.pump()
+        keys = pygame.key.get_pressed()
+        human_action = STAY
+        if keys[pygame.K_w]:
+            human_action = UP
+        elif keys[pygame.K_s]:
+            human_action = DOWN
+
+        model_action, _ = model.predict(obs, deterministic=True)
+        if human_left:
+            left_action = human_action
+            right_action = int(model_action)
+        else:
+            left_action = int(model_action)
+            right_action = human_action
+
+        obs, _, done, _ = env.step(left_action, right_action)
+        if done:
+            obs, _ = env.reset()
+
+
+def play_model_vs_model(left_path: str, right_path: str) -> None:
+    env = PongEnv(render_mode="human")
+    from stable_baselines3 import PPO
+
+    left_model = PPO.load(left_path, device="cpu")
+    right_model = PPO.load(right_path, device="cpu")
+    obs, _ = env.reset()
+    while True:
+        left_action, _ = left_model.predict(obs, deterministic=True)
+        right_action, _ = right_model.predict(obs, deterministic=True)
+        obs, _, done, _ = env.step(int(left_action), int(right_action))
+        if done:
+            obs, _ = env.reset()
+
+
+def _parse_cli():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Pong demo modes.")
+    parser.add_argument("--mode", choices=["demo", "human-vs-model", "model-vs-model"], default="demo")
+    parser.add_argument("--left-model", type=str, default="models/ppo_pong_custom_latest.zip")
+    parser.add_argument("--right-model", type=str, default="models/ppo_pong_custom_latest.zip")
+    parser.add_argument("--human-right", action="store_true", help="Human controls right paddle.")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    play_demo(render=True)
+    args = _parse_cli()
+    if args.mode == "human-vs-model":
+        play_human_vs_model(args.right_model, human_left=not args.human_right)
+    elif args.mode == "model-vs-model":
+        play_model_vs_model(args.left_model, args.right_model)
+    else:
+        play_demo(render=True)

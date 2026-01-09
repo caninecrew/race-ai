@@ -40,6 +40,8 @@ If you prefer a one-liner setup after cloning, run the bootstrap scripts:
 - 1–2 minute videos: `python train_pong_ppo.py --video-steps 3600 --max-video-seconds 120 --target-fps 30 --individual-videos`.
 - GPU profile: `python train_pong_ppo.py --profile gpu --iterations-per-set 2 --n-envs 16 --stream-tensorboard`.
 - Status check: `python train_pong_ppo.py --status` prints the current best metrics from `logs/metrics.csv`.
+- Live dashboard: `python dashboard.py` then open `http://127.0.0.1:8000` for live metrics, heatmap, and comparison panels.
+- Arcade launcher: run `scripts/launch_arcade.bat` to open the dashboard or play human/model matchups without CLI flags.
 
 ## Troubleshooting
 - Progress bars: install `pip install rich tqdm` (or `pip install stable-baselines3[extra]`) to enable the progress bar output.

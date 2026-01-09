@@ -597,9 +597,9 @@ def _train_single(
                 env.reset()
                 try:
                     if hasattr(env, "num_envs"):
-                        actions = [env.action_space.sample() for _ in range(env.num_envs)]
+                        actions = np.asarray([env.action_space.sample() for _ in range(env.num_envs)])
                     else:
-                        actions = env.action_space.sample()
+                        actions = np.asarray(env.action_space.sample())
                     env.step(actions)
                 except Exception:
                     env.close()
@@ -725,6 +725,7 @@ def main():
     best_overall_id: Optional[str] = None
     best_overall_score = float("-inf")
     last_combined_video: Optional[str] = None
+    last_eval_video: Optional[str] = None
     no_improve_cycles = 0
     max_video_frames = cfg.max_video_frames
     top_checkpoints: List[Tuple[float, str]] = []
@@ -926,6 +927,7 @@ def main():
                     eval_path = Path(cfg.video_dir) / f"{best_id}_eval_{timestamp}_seed{base_seed}.mp4"
                     if _safe_write_video(frames, eval_path, cfg.target_fps, final_overlay="Long eval clip"):
                         print(f"[{best_id}] Saved extended eval video: {eval_path}")
+                        last_eval_video = str(eval_path)
             except Exception as exc:  # pragma: no cover - non-critical
                 print(f"Could not record extended eval video: {exc}")
 
@@ -953,6 +955,7 @@ def main():
         "video_dir": cfg.video_dir,
         "model_dir": cfg.model_dir,
         "last_combined_video": last_combined_video,
+        "last_eval_video": last_eval_video,
         "run_timestamp": run_timestamp,
         "stop_reason": stop_reason,
         "cycles": cycle_reports,
