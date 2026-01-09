@@ -25,6 +25,7 @@ models/
 runs/
 tensorboard/
 *.tfevents.*
+tmp_logs/
 
 # Saved models (can be large)
 *.zip
@@ -41,3 +42,4 @@ videos/
 *.gz
 *.tar
 *.7z
+

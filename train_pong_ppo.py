@@ -3,6 +3,7 @@ import concurrent.futures
 import csv
 import json
 import os
+import traceback
 import random
 import shutil
 import tempfile
@@ -594,7 +595,15 @@ def _train_single(
                 )
                 # Prewarm to smooth jitters during initial rollout.
                 env.reset()
-                env.step(env.action_space.sample())
+                try:
+                    if hasattr(env, "num_envs"):
+                        actions = [env.action_space.sample() for _ in range(env.num_envs)]
+                    else:
+                        actions = env.action_space.sample()
+                    env.step(actions)
+                except Exception:
+                    env.close()
+                    raise
                 return env
             except Exception as exc:  # pragma: no cover - only on flaky init
                 last_err = exc
@@ -759,6 +768,9 @@ def main():
                 except Exception as exc:
                     if cfg.worker_watchdog:
                         print(f"[watchdog] Worker failed: {exc}; continuing without this model.")
+                        tb = future.exception()
+                        if tb:
+                            print(traceback.format_exc())
                         continue
                     raise
                 scores.append((model_id, metrics["avg_reward"]))
