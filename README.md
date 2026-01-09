@@ -31,6 +31,10 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+If you prefer a one-liner setup after cloning, run the bootstrap scripts:
+- Windows (PowerShell): `powershell -ExecutionPolicy Bypass -File scripts/setup_env.ps1`
+- macOS/Linux: `bash scripts/setup_env.sh`
+
 ## Smoke Tests
 - Quick checks for shapes, deterministic seeds, and paddle bounds: `python -m pytest tests/test_pong_env.py`.
 - Extended smoke / config tests: `python -m pytest tests/test_train_pipeline.py -m \"not slow\"` (or include `-m slow` to run the minimal training smoke test).
