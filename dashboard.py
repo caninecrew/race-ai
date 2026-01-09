@@ -81,6 +81,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
             }
             self._send(200, json.dumps(payload).encode("utf-8"), "application/json")
             return
+        if parsed.path == "/api/metrics":
+            metrics_csv = ROOT / "logs" / "metrics.csv"
+            series = []
+            if metrics_csv.exists():
+                with metrics_csv.open("r", encoding="utf-8") as fh:
+                    reader = csv.DictReader(fh)
+                    for row in reader:
+                        try:
+                            series.append(
+                                {
+                                    "cycle": int(row.get("cycle", 0)),
+                                    "model_id": row.get("model_id", ""),
+                                    "avg_reward": float(row.get("avg_reward", 0.0)),
+                                    "win_rate": float(row.get("win_rate", 0.0)),
+                                }
+                            )
+                        except Exception:
+                            continue
+            self._send(200, json.dumps({"series": series}).encode("utf-8"), "application/json")
+            return
         if parsed.path == "/api/heatmap":
             model_path = ROOT / "models" / "ppo_pong_custom_latest.zip"
             heat = _heatmap_from_model(model_path)
@@ -158,6 +178,19 @@ def _dashboard_html() -> str:
       </div>
     </div>
     <div class="card" style="margin-top:16px;">
+      <div class="label">Training Charts</div>
+      <div class="split">
+        <div>
+          <div class="label">Avg Reward (per cycle)</div>
+          <canvas id="chartReward" width="500" height="200"></canvas>
+        </div>
+        <div>
+          <div class="label">Win Rate (per cycle)</div>
+          <canvas id="chartWin" width="500" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
       <div class="label">Comparative Split</div>
       <div class="split">
         <div>
@@ -172,6 +205,9 @@ def _dashboard_html() -> str:
     </div>
   </div>
 <script>
+let lastCombined = "";
+let lastEval = "";
+
 async function refreshStatus() {
   const res = await fetch('/api/status');
   const data = await res.json();
@@ -184,8 +220,14 @@ async function refreshStatus() {
   document.getElementById('stopReason').textContent = report.stop_reason || '--';
   const combined = report.last_combined_video;
   const evalVid = report.last_eval_video;
-  if (combined) document.getElementById('vidCombined').src = '/file?path=' + encodeURIComponent(combined);
-  if (evalVid) document.getElementById('vidEval').src = '/file?path=' + encodeURIComponent(evalVid);
+  if (combined && combined !== lastCombined) {
+    document.getElementById('vidCombined').src = '/file?path=' + encodeURIComponent(combined);
+    lastCombined = combined;
+  }
+  if (evalVid && evalVid !== lastEval) {
+    document.getElementById('vidEval').src = '/file?path=' + encodeURIComponent(evalVid);
+    lastEval = evalVid;
+  }
 }
 async function refreshHeatmap() {
   const res = await fetch('/api/heatmap');
@@ -208,8 +250,59 @@ async function refreshHeatmap() {
 }
 setInterval(refreshStatus, 2000);
 setInterval(refreshHeatmap, 5000);
+setInterval(refreshCharts, 3000);
 refreshStatus();
 refreshHeatmap();
+refreshCharts();
+
+async function refreshCharts() {
+  const res = await fetch('/api/metrics');
+  const data = await res.json();
+  const series = data.series || [];
+  const byCycle = new Map();
+  for (const row of series) {
+    if (!byCycle.has(row.cycle)) byCycle.set(row.cycle, []);
+    byCycle.get(row.cycle).push(row);
+  }
+  const cycles = Array.from(byCycle.keys()).sort((a,b)=>a-b);
+  const rewards = cycles.map(c => {
+    const rows = byCycle.get(c);
+    const best = rows.reduce((acc, r) => Math.max(acc, r.avg_reward), -999);
+    return best;
+  });
+  const wins = cycles.map(c => {
+    const rows = byCycle.get(c);
+    const best = rows.reduce((acc, r) => Math.max(acc, r.win_rate), 0);
+    return best;
+  });
+  drawLineChart(document.getElementById('chartReward'), cycles, rewards, '#14f195');
+  drawLineChart(document.getElementById('chartWin'), cycles, wins, '#f5a623');
+}
+
+function drawLineChart(canvas, xs, ys, color) {
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if (!xs.length) return;
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const pad = 20;
+  const w = canvas.width - pad*2;
+  const h = canvas.height - pad*2;
+  ctx.strokeStyle = '#243447';
+  ctx.strokeRect(pad, pad, w, h);
+  ctx.beginPath();
+  xs.forEach((x, i) => {
+    const nx = i / (xs.length - 1 || 1);
+    const ny = (ys[i] - minY) / ((maxY - minY) || 1);
+    const px = pad + nx * w;
+    const py = pad + (1 - ny) * h;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
 </script>
 </body>
 </html>
