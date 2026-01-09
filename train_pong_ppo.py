@@ -452,7 +452,15 @@ def _train_single(
             device=cfg.device,
         )
 
-    model.learn(total_timesteps=cfg.train_timesteps, reset_num_timesteps=False, progress_bar=True)
+    progress_bar = False
+    try:
+        import rich  # type: ignore  # noqa: F401
+        import tqdm  # type: ignore  # noqa: F401
+        progress_bar = True
+    except Exception:
+        pass
+
+    model.learn(total_timesteps=cfg.train_timesteps, reset_num_timesteps=False, progress_bar=progress_bar)
 
     stamped_model_path: Optional[str] = None
     if cfg.checkpoint_interval > 0 and not cfg.no_checkpoint:
