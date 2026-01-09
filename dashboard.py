@@ -404,66 +404,105 @@ async function refreshCharts() {
     byCycle.get(row.cycle).push(row);
   }
   const cycles = Array.from(byCycle.keys()).sort((a,b)=>a-b);
-  const rewards = cycles.map(c => {
+  const rewardsBest = cycles.map(c => {
     const rows = byCycle.get(c);
-    const best = rows.reduce((acc, r) => Math.max(acc, r.avg_reward), -999);
-    return best;
+    return rows.reduce((acc, r) => Math.max(acc, r.avg_reward), -999);
   });
-  const wins = cycles.map(c => {
+  const rewardsAvg = cycles.map(c => {
     const rows = byCycle.get(c);
-    const best = rows.reduce((acc, r) => Math.max(acc, r.win_rate), 0);
-    return best;
+    return rows.reduce((acc, r) => acc + r.avg_reward, 0) / rows.length;
   });
-  const deltas = cycles.map(c => {
+  const winsBest = cycles.map(c => {
     const rows = byCycle.get(c);
-    const best = rows.reduce((acc, r) => Math.max(acc, r.delta_reward), -999);
-    return best;
+    return rows.reduce((acc, r) => Math.max(acc, r.win_rate), 0);
   });
-  const rallies = cycles.map(c => {
+  const winsAvg = cycles.map(c => {
     const rows = byCycle.get(c);
-    const best = rows.reduce((acc, r) => Math.max(acc, r.avg_rally_length), 0);
-    return best;
+    return rows.reduce((acc, r) => acc + r.win_rate, 0) / rows.length;
   });
-  drawLineChart(document.getElementById('chartReward'), cycles, rewards, '#14f195');
-  drawLineChart(document.getElementById('chartWin'), cycles, wins, '#f5a623');
-  drawLineChart(document.getElementById('chartDelta'), cycles, deltas, '#7cc6ff');
-  drawLineChart(document.getElementById('chartRally'), cycles, rallies, '#ff5f7a');
+  const deltasBest = cycles.map(c => {
+    const rows = byCycle.get(c);
+    return rows.reduce((acc, r) => Math.max(acc, r.delta_reward), -999);
+  });
+  const ralliesBest = cycles.map(c => {
+    const rows = byCycle.get(c);
+    return rows.reduce((acc, r) => Math.max(acc, r.avg_rally_length), 0);
+  });
+  const ralliesAvg = cycles.map(c => {
+    const rows = byCycle.get(c);
+    return rows.reduce((acc, r) => acc + r.avg_rally_length, 0) / rows.length;
+  });
+  drawLineChart(document.getElementById('chartReward'), cycles, [
+    { label: 'Best', color: '#14f195', values: rewardsBest },
+    { label: 'Avg', color: '#2aa4ff', values: rewardsAvg },
+  ], 'Avg Reward');
+  drawLineChart(document.getElementById('chartWin'), cycles, [
+    { label: 'Best', color: '#f5a623', values: winsBest },
+    { label: 'Avg', color: '#ffd58a', values: winsAvg },
+  ], 'Win Rate');
+  drawLineChart(document.getElementById('chartDelta'), cycles, [
+    { label: 'Best', color: '#7cc6ff', values: deltasBest },
+  ], 'Delta Reward');
+  drawLineChart(document.getElementById('chartRally'), cycles, [
+    { label: 'Best', color: '#ff5f7a', values: ralliesBest },
+    { label: 'Avg', color: '#ff9fb0', values: ralliesAvg },
+  ], 'Avg Rally Length');
 }
 
-function drawLineChart(canvas, xs, ys, color) {
+function drawLineChart(canvas, xs, series, title) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
   if (!xs.length) return;
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const pad = 20;
+  const allValues = series.flatMap(s => s.values);
+  const minY = Math.min(...allValues);
+  const maxY = Math.max(...allValues);
+  const pad = 28;
   const w = canvas.width - pad*2;
   const h = canvas.height - pad*2;
   ctx.strokeStyle = '#243447';
   ctx.strokeRect(pad, pad, w, h);
-  ctx.beginPath();
-  xs.forEach((x, i) => {
-    const nx = i / (xs.length - 1 || 1);
-    const ny = (maxY === minY) ? 0.5 : (ys[i] - minY) / (maxY - minY);
-    const px = pad + nx * w;
-    const py = pad + (1 - ny) * h;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  });
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  // Draw points so single-cycle data is visible.
-  xs.forEach((x, i) => {
-    const nx = i / (xs.length - 1 || 1);
-    const ny = (maxY === minY) ? 0.5 : (ys[i] - minY) / (maxY - minY);
-    const px = pad + nx * w;
-    const py = pad + (1 - ny) * h;
-    ctx.fillStyle = color;
+  ctx.fillStyle = '#8aa3c5';
+  ctx.font = '11px Segoe UI';
+  ctx.fillText(title, pad, 14);
+  const minLabel = minY.toFixed(2);
+  const maxLabel = maxY.toFixed(2);
+  ctx.fillText(maxLabel, 4, pad + 6);
+  ctx.fillText(minLabel, 4, pad + h);
+  series.forEach(s => {
     ctx.beginPath();
-    ctx.arc(px, py, 3, 0, Math.PI * 2);
-    ctx.fill();
+    s.values.forEach((y, i) => {
+      const nx = i / (xs.length - 1 || 1);
+      const ny = (maxY === minY) ? 0.5 : (y - minY) / (maxY - minY);
+      const px = pad + nx * w;
+      const py = pad + (1 - ny) * h;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    s.values.forEach((y, i) => {
+      const nx = i / (xs.length - 1 || 1);
+      const ny = (maxY === minY) ? 0.5 : (y - minY) / (maxY - minY);
+      const px = pad + nx * w;
+      const py = pad + (1 - ny) * h;
+      ctx.fillStyle = s.color;
+      ctx.beginPath();
+      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
   });
+  if (series.length > 1) {
+    const legendX = pad + 6;
+    let legendY = pad + h + 16;
+    series.forEach(s => {
+      ctx.fillStyle = s.color;
+      ctx.fillRect(legendX, legendY - 8, 10, 10);
+      ctx.fillStyle = '#8aa3c5';
+      ctx.fillText(s.label, legendX + 14, legendY);
+      legendY += 14;
+    });
+  }
 }
 
 function drawEmpty(canvas, label) {
