@@ -350,16 +350,20 @@ def _dashboard_html() -> str:
           <button data-panel="videos">Videos</button>
           <button data-panel="table">Recent Metrics</button>
         </div>
-        <div class="label" style="margin-top:10px;">Profile Filter</div>
+        <div class="label" style="margin-top:10px;">Run Filter</div>
+        <div class="tiny">Choose a past run to filter charts and tables.</div>
         <select id="profileSelect" style="width:100%; margin-top:6px;"></select>
         <div class="label" id="statusLine" style="margin-top:12px;">Status: --</div>
+        <div class="tiny">Shows if the dashboard is receiving live data.</div>
         <div class="label" id="dataLine">Data: --</div>
+        <div class="tiny">How many rows are currently loaded.</div>
         <div class="label" id="freshnessLine">Last update: --</div>
       </div>
     <div class="wrap">
       <h1>Live Pong Training Dashboard</h1>
       <div class="tiny" style="margin-bottom:12px;">
         This page tracks how the AI is learning to play Pong. Each "cycle" is one round of training and testing.
+        If a number is bigger, that usually means better play (unless noted).
       </div>
       <div id="panel-overview" class="panel active">
         <div class="kpi-strip">
@@ -367,31 +371,35 @@ def _dashboard_html() -> str:
             <div class="label">Best Reward</div>
             <div id="kpiBestReward" class="stat">--</div>
             <div class="tiny" id="kpiBestRewardCi">--</div>
-            <div class="tiny">Highest score from the latest cycle (bigger is better).</div>
+            <div class="tiny">Highest average score from the latest cycle (bigger is better).</div>
           </div>
           <div class="card">
             <div class="label">Avg Reward</div>
             <div id="kpiAvgReward" class="stat">--</div>
             <div class="tiny" id="kpiAvgRewardDelta">--</div>
             <div class="tiny">Average score across all models in the latest cycle.</div>
+            <div class="tiny">Reward is the game score: higher means the agent wins more points.</div>
           </div>
           <div class="card">
             <div class="label">Win Rate</div>
             <div id="kpiWinRate" class="stat">--</div>
             <div class="tiny" id="kpiWinRateDelta">--</div>
             <div class="tiny">Fraction of games the AI wins (1.00 = 100%).</div>
+            <div class="tiny">Example: 0.25 means 25% of games won.</div>
           </div>
           <div class="card">
             <div class="label">Return Rate</div>
             <div id="kpiReturnRate" class="stat">--</div>
             <div class="tiny" id="kpiReturnRateCi">--</div>
             <div class="tiny">How often the AI hits the ball back.</div>
+            <div class="tiny">1.00 = returns every shot, 0.00 = misses every shot.</div>
           </div>
           <div class="card">
             <div class="label">Rally Length</div>
             <div id="kpiRally" class="stat">--</div>
             <div class="tiny" id="kpiRallyDelta">--</div>
             <div class="tiny">Average number of hits before a point ends.</div>
+            <div class="tiny">Longer rallies usually mean better defense.</div>
           </div>
         </div>
         <div class="grid" style="margin-top:16px;">
@@ -403,6 +411,7 @@ def _dashboard_html() -> str:
             <div id="bestReward">--</div>
             <div class="label">Win Rate</div>
             <div id="bestWin">--</div>
+            <div class="tiny">This is the current champion model.</div>
           </div>
           <div class="card">
             <div class="label">Latest Run</div>
@@ -412,6 +421,7 @@ def _dashboard_html() -> str:
             <div id="stopReason">--</div>
             <div class="label" style="margin-top:8px;">Data Sources</div>
             <div id="dataSources" class="tiny">--</div>
+            <div class="tiny">Useful if data looks stale or missing.</div>
           </div>
           <div class="card">
             <div class="label">Heatmaps</div>
@@ -436,6 +446,7 @@ def _dashboard_html() -> str:
           <div class="card">
             <div class="label">Quality Gates</div>
             <div class="tiny">Set minimum targets to see if the latest model passes.</div>
+            <div class="tiny">Use this to decide if the model is "good enough" to keep.</div>
             <div class="controls">
               <input id="gateReward" type="number" step="0.1" placeholder="Reward > X"/>
               <input id="gateWin" type="number" step="0.01" placeholder="Win rate > Y"/>
@@ -448,6 +459,7 @@ def _dashboard_html() -> str:
         <div class="card">
           <div class="label">Training Charts</div>
           <div class="tiny">Trends over time. Use the selector to compare best vs average runs.</div>
+          <div class="tiny">If the lines rise over cycles, the AI is improving.</div>
           <div class="controls">
             <select id="compareMode">
               <option value="best">Best</option>
@@ -482,6 +494,7 @@ def _dashboard_html() -> str:
           <div class="card">
             <div class="label">Cycle Distribution</div>
             <div class="tiny">How spread out the scores are within one cycle.</div>
+            <div class="tiny">Wide spread = some models are much better than others.</div>
             <div class="controls">
               <select id="cycleSelect"></select>
             </div>
@@ -499,6 +512,7 @@ def _dashboard_html() -> str:
           <div class="card">
             <div class="label">Correlations</div>
             <div class="tiny">See if longer rallies or better returns link to higher reward.</div>
+            <div class="tiny">Upward trend = that metric helps the reward.</div>
             <div class="split">
               <div>
                 <div class="label">Reward vs Rally Length</div>
@@ -517,6 +531,7 @@ def _dashboard_html() -> str:
           <div class="card">
             <div class="label">Model Leaderboard</div>
             <div class="tiny">Top models by average reward.</div>
+            <div class="tiny">Higher rank means stronger overall performance.</div>
             <table>
               <thead>
                 <tr>
@@ -532,17 +547,20 @@ def _dashboard_html() -> str:
           <div class="card">
             <div class="label">Run Timeline</div>
             <div class="tiny">Click a cycle to see a quick summary.</div>
+            <div class="tiny">Use this to spot when performance changed.</div>
             <div id="timeline" class="timeline"></div>
             <div id="timelineDetail" class="tiny" style="margin-top:8px;">--</div>
           </div>
           <div class="card">
             <div class="label">Video Insights</div>
             <div class="tiny">Highlights from the longest rallies.</div>
+            <div class="tiny">Long rallies often show strong defense.</div>
             <div id="videoInsights" class="tiny">--</div>
           </div>
           <div class="card">
             <div class="label">Annotations</div>
             <div class="tiny">Leave short observations as you watch training.</div>
+            <div class="tiny">Example: "Cycle 3 learns to track high balls."</div>
             <div class="controls">
               <input id="noteCycle" type="number" placeholder="Cycle #"/>
               <input id="noteText" type="text" placeholder="What stood out?"/>
@@ -556,6 +574,7 @@ def _dashboard_html() -> str:
         <div class="card">
           <div class="label">Cohort Comparison</div>
           <div class="tiny">Pick two runs to compare average performance.</div>
+          <div class="tiny">If numbers are missing, that run has no tagged metrics yet.</div>
           <div id="cohortStatus" class="tiny">Runs available: --</div>
           <div class="controls">
             <select id="cohortA">
@@ -581,6 +600,7 @@ def _dashboard_html() -> str:
         <div class="card">
           <div class="label">Comparative Split</div>
           <div class="tiny">Side-by-side videos from the latest evaluation.</div>
+          <div class="tiny">Left is the latest combined clip; right is a longer review.</div>
           <div class="split">
             <div>
               <div class="label">Latest Combined</div>
@@ -599,6 +619,7 @@ def _dashboard_html() -> str:
         <div class="card">
           <div class="label">Recent Metrics</div>
           <div class="tiny">Raw numbers per cycle. Scroll to see older entries.</div>
+          <div class="tiny">If a row looks odd, it may be from a different run.</div>
           <div class="controls">
             <button id="downloadCsv" class="pill">Download CSV</button>
             <select id="snapshotSelect"></select>
